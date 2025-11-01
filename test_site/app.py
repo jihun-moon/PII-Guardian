@@ -2,8 +2,8 @@
 # 위치: Pii-Guardian/test_site/
 
 from flask import Flask, make_response
-# 바로 옆에 있는 generate_dataset_v2 파일에서 함수를 가져옴
-from generate_dataset_v2 import generate_random_test_data
+# (✨ 수정) v2 대신 v3에서 함수를 가져옴
+from generate_dataset_v3 import generate_random_test_data
 
 app = Flask(__name__)
 
