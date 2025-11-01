@@ -1,5 +1,5 @@
 # 🕵️ (봇 1) '신입' 봇. '의심' 내역 수집 -> detected_leaks.csv
-# (v2.1 - 실제 웹사이트 크롤링 및 OCR 기능 활성화)
+# (v2.2 - 실제 웹사이트 크롤링 / OCR 기능은 비활성화)
 
 import requests
 from bs4 import BeautifulSoup
@@ -8,12 +8,12 @@ import pandas as pd
 import os
 import time
 from transformers import pipeline, AutoTokenizer, AutoModelForTokenClassification
-from urllib.parse import urljoin # (✨ 신규) 상대 경로 -> 절대 경로 변환
+from urllib.parse import urljoin 
 import logging
 
 # 우리 헬퍼 및 설정 파일 임포트
 import config
-import ocr_helper # (✨ 이제 실제로 사용됨)
+import ocr_helper # (✨ 임포트는 하되, 아래에서 사용 안 함)
 
 # --- 1. 설정값 ---
 BASE_PATH = "/root/PII-Guardian"
@@ -33,20 +33,14 @@ REGEX_PATTERNS = {
     'PHONE': r'\b010[-.\s]?\d{4}[-.\s]?\d{4}\b',
 }
 
-# (✨✨✨ 핵심 수정 ✨✨✨)
 # --- 여기에 탐지하고 싶은 실제 웹사이트 주소를 넣으세요 ---
 CRAWL_URLS = [
     "https://www.dcinside.com/"]
-# --- (기존 테스트 파일은 주석 처리) ---
-# TEST_FILES = [
-#     os.path.join(BASE_PATH, 'test_site/index.html'),
-#     os.path.join(BASE_PATH, 'test_site/page_with_image.html')
-# ]
 
 # --- 2. 봇의 '뇌' (AI 모델) 로드 ---
 def load_ner_pipeline():
     """봇의 '뇌'(NER 모델)를 로드합니다."""
-    # (이하 내용은 기존과 동일)
+    # (내용 동일)
     token_file_path = "/root/.cache/huggingface/token"
     hf_token = None
     if os.path.exists(token_file_path):
@@ -91,9 +85,9 @@ def load_ner_pipeline():
 # --- 3. 유출 탐지 함수 (텍스트용) ---
 def find_leaks_in_text(text, ner_pipeline):
     """주어진 텍스트에서 RegEx와 NER로 PII를 찾습니다."""
-    # (이하 내용은 기존과 동일)
+    # (내용 동일)
     leaks = []
-    if not text: # (✨ 방어 코드) 텍스트가 비어있으면 즉시 반환
+    if not text: 
         return leaks
         
     context_preview = text.strip().replace('\n', ' ').replace('\r', ' ')[0:300]
@@ -125,9 +119,9 @@ def find_leaks_in_text(text, ner_pipeline):
             
     return leaks
 
-# --- 4. (✨ 신규) 실제 웹 크롤링 함수 ---
+# --- 4. (✨ 수정) 실제 웹 크롤링 함수 (OCR 비활성화) ---
 def crawl_web_page(page_url, ner_pipeline):
-    """(기능 1) 하나의 '실제 웹페이지'를 크롤링하고 OCR을 수행합니다."""
+    """(기능 1) 하나의 '실제 웹페이지'를 크롤링합니다. (OCR은 비활성화)"""
     logging.info(f"🕵️ [웹 크롤링] 시작: {page_url}")
     leaks_found = []
     
@@ -146,32 +140,26 @@ def crawl_web_page(page_url, ner_pipeline):
         page_text = soup.body.get_text(separator=' ')
         leaks_found.extend(find_leaks_in_text(page_text, ner_pipeline))
         
-        # 4-3. (✨ OCR 활성화) 페이지 내 모든 이미지 탐지
-        images = soup.find_all('img')
-        logging.info(f"🖼️  {len(images)}개의 이미지를 발견. CLOVA OCR 스캔을 시작합니다...")
+        # (✨✨✨ 핵심 수정 ✨✨✨)
+        # --- 4-3. OCR 기능 주석 처리 ---
+        # logging.info(f"🖼️  (OCR 기능 비활성화됨)")
+        # images = soup.find_all('img')
         
-        for img in images:
-            if not img.get('src'):
-                continue
-                
-            # '/img/logo.png' 같은 상대 경로를 'https://example.com/img/logo.png'로 변환
-            image_url = urljoin(page_url, img['src'])
-            
-            # (예외) data:image/png;base64,... 같은 임베디드 이미지는 스킵
-            if image_url.startswith('data:'):
-                continue
-
-            # 4-4. OCR API 호출
-            ocr_text = ocr_helper.get_ocr_text(image_url)
-            
-            if ocr_text:
-                logging.info(f"  -> 👁️ OCR 스캔 성공: {image_url}")
-                # OCR로 읽은 텍스트에서 PII 탐지
-                ocr_leaks = find_leaks_in_text(ocr_text, ner_pipeline)
-                for leak in ocr_leaks:
-                    leak['type'] = f"{leak['type']} (Image)" # (이미지) 태그 추가
-                    leak['context'] = f"[이미지 스캔] {ocr_text[:200]}..." # 문맥을 OCR 텍스트로
-                leaks_found.extend(ocr_leaks)
+        # for img in images:
+        #     if not img.get('src'):
+        #         continue
+        #     image_url = urljoin(page_url, img['src'])
+        #     if image_url.startswith('data:'):
+        #         continue
+        #     ocr_text = ocr_helper.get_ocr_text(image_url)
+        #     if ocr_text:
+        #         logging.info(f"  -> 👁️ OCR 스캔 성공: {image_url}")
+        #         ocr_leaks = find_leaks_in_text(ocr_text, ner_pipeline)
+        #         for leak in ocr_leaks:
+        #             leak['type'] = f"{leak['type']} (Image)"
+        #             leak['context'] = f"[이미지 스캔] {ocr_text[:200]}..."
+        #         leaks_found.extend(ocr_leaks)
+        # --- (주석 처리 끝) ---
         
         return leaks_found
         
@@ -188,7 +176,7 @@ def crawl_web_page(page_url, ner_pipeline):
 # --- 6. CSV 저장 함수 ---
 def get_existing_keys(file_path):
     """CSV 파일에서 (content, url) 키 세트를 로드합니다."""
-    # (이하 내용은 기존과 동일)
+    # (내용 동일)
     if not os.path.exists(file_path):
         return set()
     try:
@@ -205,7 +193,7 @@ def get_existing_keys(file_path):
 
 def save_to_csv(all_leaks):
     """탐지된 모든 내역을 '의심' 목록(CSV)에 '추가'합니다."""
-    # (이하 내용은 기존과 동일)
+    # (내용 동일)
     if not all_leaks:
         return
             
@@ -241,22 +229,17 @@ if __name__ == "__main__":
     
     total_leaks_found = []
     
-    # (✨✨✨ 핵심 수정 ✨✨✨)
     # --- 실제 웹사이트 크롤링 시작 ---
-    logging.info(f"🛰️ [실제 웹 크롤링] {len(CRAWL_URLS)}개의 URL을 스캔합니다.")
+    logging.info(f"🛰️ [실제 웹 크롤링] {len(CRAWL_URLS)}개의 URL을 스캔합니다. (OCR 비활성화)")
     for url in CRAWL_URLS:
         leaks = crawl_web_page(url, ner_brain)
         for leak in leaks:
-            leak['url'] = url # url을 그대로 기록
-            leak['repo'] = 'web-crawl' # (repo 대신 'web-crawl'로 구분)
+            leak['url'] = url 
+            leak['repo'] = 'web-crawl' 
         total_leaks_found.extend(leaks)
-        time.sleep(1) # (예의상) 사이트 부하 방지를 위해 1초 대기
+        time.sleep(1) 
 
-    # (✨ 기존 로컬 파일 코드는 주석 처리)
-    # for file_path in TEST_FILES: ...
-            
-    # (✨ 깃허브 API 검색은 여전히 주석 처리)
-    # logging.info("🛰️ [GitHub API] 검색을 시작합니다...")
+    # (깃허브 API 검색은 여전히 주석 처리)
             
     # 최종 결과 저장
     if total_leaks_found:
