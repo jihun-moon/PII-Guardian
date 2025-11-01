@@ -53,8 +53,8 @@ REGEX_PATTERNS = {
 
 # (✨ 탐지할 URL - 올바른 주소)
 CRAWL_URLS = [
-    "https://github.com/jihun-moon/PII-Guardian/blob/main/test_site/test_site_comprehensive.html",
-    "https://github.com/jihun-moon/PII-Guardian/blob/main/test_site/test_site_images.html",
+    "https://github.com/jihun-moon/PII-Guardian/blob/main/test_site/index.html",
+    "https://github.com/jihun-moon/PII-Guardian/blob/main/test_site/page_with_image.html",
 ]
 
 # (✨ 신규) Selenium 드라이버 설정
