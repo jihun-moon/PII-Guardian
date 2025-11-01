@@ -2,19 +2,68 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>테스트 페이지 2</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>종합 OCR 테스트 허브</title>
+    <style>
+        body { font-family: sans-serif; line-height: 1.6; padding: 20px; max-width: 900px; margin: auto; }
+        h1, h2 { color: #333; }
+        .content { background: #f9f9f9; border: 1px solid #ddd; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        img { max-width: 100%; border: 2px solid #ccc; margin-top: 10px; }
+    </style>
 </head>
 <body>
-    <h1>이미지 유출 테스트 페이지</h1>
-    <p>
-        이 페이지는 봇이 이미지(OCR)에서 개인정보를 잘 찾는지 테스트합니다.
-    </p>
 
-    <!-- 
-      🚨 중요: 'personal_info.png' 파일을 
-      이 파일과 같은 'test_site' 폴더 안에 직접 만들어 업로드해야 합니다. 
-    -->
-    <img src="personal_info.png" alt="유출된 스크린샷" width="500">
+    <h1>종합 OCR (이미지) 유출 테스트</h1>
+    <p>이 페이지는 PII-Guardian 봇이 CLOVA OCR을 통해 이미지 속 텍스트 PII를 잘 탐지하는지 테스트합니다.</p>
+    <p>(참고: 이 이미지들은 실제 파일이 아닌, 텍스트가 포함된 placeholder URL입니다.)</p>
+
+    <div class="content">
+        <h2>(시나리오 1) 명백한 '유출' (가짜 내부 스크린샷)</h2>
+        <p>
+            '신입' 봇이 이미지 속 텍스트(010-1234-5678, backup-dev@...)를 읽어야 합니다.<br>
+            '전문가' 봇(LLM)은 이 문맥을 보고 '유출(Leak)'로 판단해야 합니다.
+        </p>
+        <!-- 
+          placehold.co를 사용하여 "텍스트가 쓰인 이미지"를 시뮬레이션
+          텍스트: [비상연락망]\n담당자: 010-1234-5678\n임시 이메일: backup-dev@my-bot.com
+        -->
+        <img src="https://placehold.co/800x200/fff0f0/c00?text=[비상연락망]\n담당자: 010-1234-5678\n임시 이메일: backup-dev@my-bot.com" alt="비상 연락망 스크린샷">
+    </div>
+
+    <div class="content">
+        <h2>(시나리오 2) 명백한 '공개' (가짜 명함/고객센터)</h2>
+        <p>
+            봇이 이미지 속 텍스트(1588-5050, help@dgb.co.kr)를 읽어야 합니다.<br>
+            '전문가' 봇(LLM)은 '고객센터', '대표전화' 등의 문맥을 보고 '공개(Public)'로 판단해야 합니다.
+        </p>
+        <!-- 
+          텍스트: IM뱅크 고객센터\n대표전화: 1588-5050\n이메일: help@dgb.co.kr
+        -->
+        <img src="https://placehold.co/800x200/e0f0ff/007bff?text=IM뱅크 고객센터\n대표전화: 1588-5050\n이메일: help@dgb.co.kr" alt="고객센터 안내 이미지">
+    </div>
+
+    <div class="content">
+        <h2>(시나리오 3) AI-NER 탐지 (가짜 포스터)</h2>
+        <p>
+            봇이 이미지 속 텍스트('홍길동', 'DGB대구은행')를 읽어야 합니다.<br>
+            '신입' 봇의 AI-NER가 '홍길동(PS)'과 'DGB대구은행(OG)'을 탐지해야 합니다.
+        </p>
+        <!-- 
+          텍스트: IM뱅크 출시 기념 강연\n연사: 홍길동 부장 (DGB대구은행)
+        -->
+        <img src="https://placehold.co/800x200/f0e8ff/5a00c2?text=IM뱅크 출시 기념 강연\n연사: 홍길동 부장 (DGB대구은행)" alt="행사 포스터">
+    </div>
+
+    <div class="content">
+        <h2>(시나리오 4) PII가 없는 이미지 (안전)</h2>
+        <p>
+            봇이 이 이미지를 스캔(OCR)하지만, PII가 없으므로 아무것도 탐지하지 않아야 합니다. (False Positive 테스트)
+        </p>
+        <!-- 
+          텍스트: IM뱅크\n새로운 기능 출시!
+        -->
+        <img src="https://placehold.co/800x200/e6f9e6/006400?text=IM뱅크\n새로운 기능 출시!" alt="광고 배너">
+    </div>
 
 </body>
 </html>
