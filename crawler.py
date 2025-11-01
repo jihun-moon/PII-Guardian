@@ -1,5 +1,5 @@
 # 🕵️ (봇 1) '신입' 봇. '의심' 내역 수집 -> detected_leaks.csv
-# (내용은 기존과 동일, print -> logging으로만 수정됨)
+# (v2.1 - 실제 웹사이트 크롤링 및 OCR 기능 활성화)
 
 import requests
 from bs4 import BeautifulSoup
@@ -8,18 +8,17 @@ import pandas as pd
 import os
 import time
 from transformers import pipeline, AutoTokenizer, AutoModelForTokenClassification
-from urllib.parse import urljoin
-import logging # (✨ 수정)
+from urllib.parse import urljoin # (✨ 신규) 상대 경로 -> 절대 경로 변환
+import logging
 
 # 우리 헬퍼 및 설정 파일 임포트
 import config
-import ocr_helper 
+import ocr_helper # (✨ 이제 실제로 사용됨)
 
 # --- 1. 설정값 ---
 BASE_PATH = "/root/PII-Guardian"
 LOG_FILE = os.path.join(BASE_PATH, 'crawler.log')
 
-# (✨ 수정) 로깅 설정
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s',
                     handlers=[logging.FileHandler(LOG_FILE), logging.StreamHandler()])
@@ -34,15 +33,20 @@ REGEX_PATTERNS = {
     'PHONE': r'\b010[-.\s]?\d{4}[-.\s]?\d{4}\b',
 }
 
-TEST_FILES = [
-    os.path.join(BASE_PATH, 'test_site/index.html'),
-    os.path.join(BASE_PATH, 'test_site/page_with_image.html')
-]
+# (✨✨✨ 핵심 수정 ✨✨✨)
+# --- 여기에 탐지하고 싶은 실제 웹사이트 주소를 넣으세요 ---
+CRAWL_URLS = [
+    "https://www.dcinside.com/"]
+# --- (기존 테스트 파일은 주석 처리) ---
+# TEST_FILES = [
+#     os.path.join(BASE_PATH, 'test_site/index.html'),
+#     os.path.join(BASE_PATH, 'test_site/page_with_image.html')
+# ]
 
 # --- 2. 봇의 '뇌' (AI 모델) 로드 ---
 def load_ner_pipeline():
     """봇의 '뇌'(NER 모델)를 로드합니다."""
-    
+    # (이하 내용은 기존과 동일)
     token_file_path = "/root/.cache/huggingface/token"
     hf_token = None
     if os.path.exists(token_file_path):
@@ -53,7 +57,6 @@ def load_ner_pipeline():
                  logging.info("✅ Hugging Face 토큰 파일을 성공적으로 읽었습니다.")
             else:
                  logging.warning("⚠️ [경고] /root/.cache/huggingface/token 파일이 비어있습니다.")
-                 logging.warning("⚠️ GitHub Secret 'HF_TOKEN'에 값이 올바르게 입력되었는지 확인하세요!")
         except Exception as e:
             logging.warning(f"⚠️ [경고] Hugging Face 토큰 파일 읽기 실패: {e}")
     else:
@@ -72,11 +75,9 @@ def load_ner_pipeline():
         tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH, token=hf_token)
         model = AutoModelForTokenClassification.from_pretrained(MODEL_PATH, token=hf_token)
         logging.info(f"✅ '경력직' AI 뇌({MODEL_PATH}) 로드 성공!")
-        
     except Exception as e: 
         logging.warning(f"⚠️ '경력직' AI 뇌({MODEL_PATH}) 로드 실패. 원인: {e}")
         logging.info(f"➡️ '신입' 뇌({BASE_MODEL})를 로드합니다.")
-        
         try:
             tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, token=hf_token)
             model = AutoModelForTokenClassification.from_pretrained(BASE_MODEL, token=hf_token)
@@ -90,8 +91,11 @@ def load_ner_pipeline():
 # --- 3. 유출 탐지 함수 (텍스트용) ---
 def find_leaks_in_text(text, ner_pipeline):
     """주어진 텍스트에서 RegEx와 NER로 PII를 찾습니다."""
+    # (이하 내용은 기존과 동일)
     leaks = []
-    
+    if not text: # (✨ 방어 코드) 텍스트가 비어있으면 즉시 반환
+        return leaks
+        
     context_preview = text.strip().replace('\n', ' ').replace('\r', ' ')[0:300]
     
     for pii_type, pattern in REGEX_PATTERNS.items():
@@ -121,38 +125,70 @@ def find_leaks_in_text(text, ner_pipeline):
             
     return leaks
 
-# --- 4. 크롤링 함수 (✨ 로컬 파일 읽기) ---
-def crawl_local_file(file_path, ner_pipeline):
-    """(기능 1) 하나의 '로컬 테스트 파일'을 읽습니다."""
-    logging.info(f"🕵️ [로컬 테스트] 파일 읽기 시작: {file_path}")
+# --- 4. (✨ 신규) 실제 웹 크롤링 함수 ---
+def crawl_web_page(page_url, ner_pipeline):
+    """(기능 1) 하나의 '실제 웹페이지'를 크롤링하고 OCR을 수행합니다."""
+    logging.info(f"🕵️ [웹 크롤링] 시작: {page_url}")
     leaks_found = []
+    
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            html_content = f.read()
+        # 4-1. 웹페이지 다운로드
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'}
+        response = requests.get(page_url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
+        if not soup.body: 
+            return []
             
-        soup = BeautifulSoup(html_content, 'html.parser')
-        
-        if not soup.body: return []
+        # 4-2. 페이지 텍스트 탐지
         page_text = soup.body.get_text(separator=' ')
-        
         leaks_found.extend(find_leaks_in_text(page_text, ner_pipeline))
         
-        # (✨ OCR 기능은 비활성화 상태 유지)
+        # 4-3. (✨ OCR 활성화) 페이지 내 모든 이미지 탐지
+        images = soup.find_all('img')
+        logging.info(f"🖼️  {len(images)}개의 이미지를 발견. CLOVA OCR 스캔을 시작합니다...")
+        
+        for img in images:
+            if not img.get('src'):
+                continue
+                
+            # '/img/logo.png' 같은 상대 경로를 'https://example.com/img/logo.png'로 변환
+            image_url = urljoin(page_url, img['src'])
+            
+            # (예외) data:image/png;base64,... 같은 임베디드 이미지는 스킵
+            if image_url.startswith('data:'):
+                continue
+
+            # 4-4. OCR API 호출
+            ocr_text = ocr_helper.get_ocr_text(image_url)
+            
+            if ocr_text:
+                logging.info(f"  -> 👁️ OCR 스캔 성공: {image_url}")
+                # OCR로 읽은 텍스트에서 PII 탐지
+                ocr_leaks = find_leaks_in_text(ocr_text, ner_pipeline)
+                for leak in ocr_leaks:
+                    leak['type'] = f"{leak['type']} (Image)" # (이미지) 태그 추가
+                    leak['context'] = f"[이미지 스캔] {ocr_text[:200]}..." # 문맥을 OCR 텍스트로
+                leaks_found.extend(ocr_leaks)
         
         return leaks_found
-    except FileNotFoundError:
-        logging.error(f"❌ [에러] {file_path} 파일을 찾을 수 없습니다.")
+        
+    except requests.exceptions.RequestException as e:
+        logging.error(f"❌ [웹 크롤링 에러] {page_url} 다운로드 실패: {e}")
         return []
     except Exception as e:
-        logging.error(f"❌ [에러] {file_path} 파일 처리 실패: {e}")
+        logging.error(f"❌ [웹 크롤링 에러] {page_url} 처리 실패: {e}")
         return []
 
-# --- 5. (✨ 주석 처리) 깃허브 검색 함수 ---
+# --- 5. (주석 처리) 깃허브 검색 함수 ---
 # def search_github_api(query, ner_pipeline): ...
 
 # --- 6. CSV 저장 함수 ---
 def get_existing_keys(file_path):
     """CSV 파일에서 (content, url) 키 세트를 로드합니다."""
+    # (이하 내용은 기존과 동일)
     if not os.path.exists(file_path):
         return set()
     try:
@@ -169,6 +205,7 @@ def get_existing_keys(file_path):
 
 def save_to_csv(all_leaks):
     """탐지된 모든 내역을 '의심' 목록(CSV)에 '추가'합니다."""
+    # (이하 내용은 기존과 동일)
     if not all_leaks:
         return
             
@@ -204,13 +241,24 @@ if __name__ == "__main__":
     
     total_leaks_found = []
     
-    for file_path in TEST_FILES:
-        leaks = crawl_local_file(file_path, ner_brain)
+    # (✨✨✨ 핵심 수정 ✨✨✨)
+    # --- 실제 웹사이트 크롤링 시작 ---
+    logging.info(f"🛰️ [실제 웹 크롤링] {len(CRAWL_URLS)}개의 URL을 스캔합니다.")
+    for url in CRAWL_URLS:
+        leaks = crawl_web_page(url, ner_brain)
         for leak in leaks:
-            leak['url'] = os.path.basename(file_path)
-            leak['repo'] = 'test-site'
+            leak['url'] = url # url을 그대로 기록
+            leak['repo'] = 'web-crawl' # (repo 대신 'web-crawl'로 구분)
         total_leaks_found.extend(leaks)
+        time.sleep(1) # (예의상) 사이트 부하 방지를 위해 1초 대기
+
+    # (✨ 기존 로컬 파일 코드는 주석 처리)
+    # for file_path in TEST_FILES: ...
             
+    # (✨ 깃허브 API 검색은 여전히 주석 처리)
+    # logging.info("🛰️ [GitHub API] 검색을 시작합니다...")
+            
+    # 최종 결과 저장
     if total_leaks_found:
         save_to_csv(total_leaks_found)
     
