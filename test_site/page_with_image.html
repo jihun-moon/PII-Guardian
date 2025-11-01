@@ -3,17 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>종합 OCR 테스트 허브</title>
+    <title>종합 OCR 테스트 허브 (v2)</title>
     <style>
         body { font-family: sans-serif; line-height: 1.6; padding: 20px; max-width: 900px; margin: auto; }
         h1, h2 { color: #333; }
         .content { background: #f9f9f9; border: 1px solid #ddd; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
         img { max-width: 100%; border: 2px solid #ccc; margin-top: 10px; }
+        .warning { color: red; font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <h1>종합 OCR (이미지) 유출 테스트</h1>
+    <h1>종합 OCR (이미지) 유출 테스트 (v2)</h1>
     <p>이 페이지는 PII-Guardian 봇이 CLOVA OCR을 통해 이미지 속 텍스트 PII를 잘 탐지하는지 테스트합니다.</p>
     <p>(참고: 이 이미지들은 실제 파일이 아닌, 텍스트가 포함된 placeholder URL입니다.)</p>
 
@@ -24,7 +25,6 @@
             '전문가' 봇(LLM)은 이 문맥을 보고 '유출(Leak)'로 판단해야 합니다.
         </p>
         <!-- 
-          placehold.co를 사용하여 "텍스트가 쓰인 이미지"를 시뮬레이션
           텍스트: [비상연락망]\n담당자: 010-1234-5678\n임시 이메일: backup-dev@my-bot.com
         -->
         <img src="https://placehold.co/800x200/fff0f0/c00?text=[비상연락망]\n담당자: 010-1234-5678\n임시 이메일: backup-dev@my-bot.com" alt="비상 연락망 스크린샷">
@@ -63,6 +63,42 @@
           텍스트: IM뱅크\n새로운 기능 출시!
         -->
         <img src="https://placehold.co/800x200/e6f9e6/006400?text=IM뱅크\n새로운 기능 출시!" alt="광고 배너">
+    </div>
+    
+    <!-- ✨ (신규) 시나리오 5: 금융 정보 (IM 뱅크 특화) ✨ -->
+    <div class="content">
+        <h2>(시나리오 5) 금융 정보 '유출' (가짜 계좌 스크린샷)</h2>
+        <p>
+            봇이 DGB 계좌번호, 카드번호를 읽어내야 합니다. '유출(Leak)'로 판단되어야 합니다.
+        </p>
+        <!-- 
+          텍스트: [계좌 이체 오류]\n출금계좌: 112-50-1234567 (DGB)\n카드번호: 4500-1234-5678-9012
+        -->
+        <img src="https://placehold.co/800x200/fffbe6/d9a000?text=[계좌 이체 오류]\n출금계좌: 112-50-1234567 (DGB)\n카드번호: 4500-1234-5678-9012" alt="계좌 정보 스크린샷">
+    </div>
+    
+    <!-- ✨ (신규) 시나리오 6: 민감 정보 (주민등록증 시뮬) ✨ -->
+    <div class="content">
+        <h2>(시나리오 6) 최고 등급 민감 정보 '유출' (신분증)</h2>
+        <p>
+            봇이 주민번호, 이름 등을 읽어내야 합니다. '유출(Leak)'로 판단되어야 합니다.
+        </p>
+        <!-- 
+          텍스트: [주민등록증]\n김대한 (Kim Daehan)\n901231-1234567\n대구광역시 ...
+        -->
+        <img src="https://placehold.co/800x200/ffe6e6/c00?text=[주민등록증]\n김대한 (Kim Daehan)\n901231-1234567\n대구광역시 ..." alt="신분증 스크린샷">
+    </div>
+    
+    <!-- ✨ (신규) 시나리오 7: 기술 정보 (코드 스크린샷) ✨ -->
+    <div class="content">
+        <h2>(시나리오 7) 내부 기술 정보 '유출' (코드 스크린샷)</h2>
+        <p>
+            봇이 이미지 속 API 키, 내부 IP 등을 읽어내야 합니다. '유출(Leak)'로 판단되어야 합니다.
+        </p>
+        <!-- 
+          텍스트: [config.py]\nAPI_KEY = "im-key-prod-..."\nDB_HOST = "10.0.0.5"
+        -->
+        <img src="https://placehold.co/800x200/333333/ffffff?text=[config.py]\nAPI_KEY = "im-key-prod-..."\nDB_HOST = "10.0.0.5"" alt="코드 스크린샷">
     </div>
 
 </body>
