@@ -82,4 +82,8 @@ jobs:
             systemctl restart pii-guardian.service || true
             
             echo "✅ 배포 성공! (Dashboard service restarted, Cron jobs updated)"
-            EOF
+          # (수정 완료) EOF는 반드시 해당 줄의 맨 앞에, 공백 없이 위치해야 합니다.
+          # (YAML 수정) 이 EOF는 run: | 블록에 포함되어야 하므로, ssh 명령어(10칸)와
+          # 동일한 수준으로 들여쓰기합니다.
+          EOF
+
