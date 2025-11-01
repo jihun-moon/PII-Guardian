@@ -25,10 +25,11 @@ from transformers import ( # (✨ 신규)
 BASE_PATH = "/root/PII-Guardian" 
 LOG_FILE = os.path.join(BASE_PATH, 'train.log')
 
-# (✨ 수정) 로깅 설정
+# (✨✨✨ 핵심 수정: 로그 중복 제거 ✨✨✨)
+# FileHandler를 제거하고 StreamHandler만 남깁니다.
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s',
-                    handlers=[logging.FileHandler(LOG_FILE), logging.StreamHandler()])
+                    handlers=[logging.StreamHandler()])
 
 FEEDBACK_FILE = os.path.join(BASE_PATH, 'feedback_data.csv')
 MODEL_PATH = os.path.join(BASE_PATH, 'my-ner-model') # 🧠 '경력직' 뇌 저장 경로

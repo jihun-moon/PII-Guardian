@@ -6,6 +6,10 @@
 import requests
 import json
 import config # (우리의 비밀 키 로드)
+import logging # (✨ 신규)
+
+# (✨ 신규) autolabeler와 같은 로거를 사용합니다.
+logger = logging.getLogger(__name__)
 
 # HyperCLOVA X 모델에 보낼 시스템 프롬프트 (명령어)
 SYSTEM_PROMPT = """
@@ -60,8 +64,6 @@ def get_llm_judgment(context, pii_content):
         
         # --- (✨ 핵심 수정) ---
         # v3 응답 구조가 'choices'가 아닌 'result' 키를 사용합니다.
-        # [수정 전] json_content = result['choices'][0]['message']['content']
-        # [수정 후]
         json_content = result['result']['message']['content']
         # --- (수정 끝) ---
         
@@ -70,10 +72,12 @@ def get_llm_judgment(context, pii_content):
         return llm_answer # {"label": "...", "reason": "..."}
         
     except requests.exceptions.ReadTimeout:
-        print("❌ [LLM API 에러] HyperCLOVA 타임아웃")
+        # (✨ 수정) print -> logger.error
+        logger.error("❌ [LLM API 에러] HyperCLOVA 타임아웃")
         return {"label": "오류", "reason": "타임아웃"}
     except Exception as e:
-        print(f"❌ [LLM API 에러] {e}")
+        # (✨ 수정) print -> logger.error
+        logger.error(f"❌ [LLM API 에러] {e}")
         if 'response' in locals():
-            print(f"    (응답: {response.text})")
+            logger.error(f"    (응답: {response.text})")
         return {"label": "오류", "reason": str(e)}
