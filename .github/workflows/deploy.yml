@@ -30,43 +30,66 @@ jobs:
             # 0. 시스템 패키지 설치
             echo "Updating packages..."
             apt-get update
-            apt-get install -y python3-pip git python3-venv wget gnupg unzip curl ca-certificates
+            # (✨ 수정) jq, curl, unzip, ca-certificates 등 필수 패키지 설치
+            apt-get install -y python3-pip git python3-venv wget gnupg unzip curl ca-certificates jq
             
-            # (✨✨✨ 핵심 수정 v2.7 - GPG 오류 최종 수정 ✨✨✨)
+            # (✨✨✨ 핵심 수정 v2.8 - GPG 오류 우회 ✨✨✨)
             
-            # (✨ 1. Google Chrome 설치 - "임시 파일" 방식)
-            echo "Installing Google Chrome (GPG Keyring v2.7)..."
-            # 1a. GPG 키 저장을 위한 디렉토리 생성
-            mkdir -p /etc/apt/keyrings
-            # 1b. GPG 키를 /tmp/ 임시 파일로 다운로드
-            curl -fsSL https://dl-ssl.google.com/linux/linux_signing_key.pub -o /tmp/google-chrome.pub
-            # 1c. 임시 파일에서 GPG 키를 dearmor하여 /etc/apt/keyrings로 이동
-            gpg --dearmor -o /etc/apt/keyrings/google-chrome.gpg /tmp/google-chrome.pub
-            # 1d. Chrome apt 저장소 설정 (signed-by 옵션 추가)
-            echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | tee /etc/apt/sources.list.d/google-chrome.list > /dev/null
-            # 1e. 임시 파일 삭제
-            rm /tmp/google-chrome.pub
-
-            # (✨ 2. ChromeDriver 공식 저장소 추가 - "임시 파일" 방식)
-            echo "Installing ChromeDriver (GPG Keyring v2.7)..."
-            # 2a. GPG 키를 /tmp/ 임시 파일로 다운로드
-            curl -fsSL https://edgedl.me/chrome-for-testing/linux/latest/KEY.gpg -o /tmp/chrome-for-testing.pub
-            # 2b. 임시 파일에서 GPG 키를 dearmor하여 /etc/apt/keyrings로 이동
-            gpg --dearmor -o /etc/apt/keyrings/chrome-for-testing.gpg /tmp/chrome-for-testing.pub
-            # 2c. ChromeDriver apt 저장소 설정 (signed-by 옵션 추가)
-            echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/chrome-for-testing.gpg] https://edgedl.me/chrome-for-testing/deb/ stable main" | tee /etc/apt/sources.list.d/chrome-for-testing.list > /dev/null
-            # 2d. 임시 파일 삭제
-            rm /tmp/chrome-for-testing.pub
-
-            # (✨ 3. apt-get update를 모든 저장소 추가 *후*에 실행)
-            echo "Updating apt lists..."
+            # (✨ 1. Google Chrome (브라우저)만 APT로 설치)
+            echo "Installing Google Chrome (GPG Keyring v2.8)..."
+            curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome-keyring.gpg
+            echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome-keyring.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
+            
+            # (✨ 2. apt-get update 및 Chrome 설치)
             apt-get update
+            apt-get install -y google-chrome-stable
+            echo "Google Chrome installed."
+
+            # (✨ 3. ChromeDriver (조종기) 수동 설치 - GPG 오류 우회)
+            echo "Installing matching ChromeDriver (Manual Download)..."
             
-            # (✨ 4. Chrome과 ChromeDriver를 apt로 설치)
-            echo "Installing chrome and chromedriver..."
-            apt-get install -y google-chrome-stable chromedriver
+            # 3a. 방금 설치한 Chrome의 버전(e.g., 125.0.6422.112)을 가져옴
+            CHROME_VERSION=$(google-chrome-stable --version | awk '{print $3}')
+            echo "Installed Chrome version: $CHROME_VERSION"
             
-            echo "Chrome and ChromeDriver installed via apt."
+            # 3b. JSON API에서 버전과 일치하는 다운로드 URL 검색
+            DRIVER_URL=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json" | jq -r --arg ver "$CHROME_VERSION" '[.versions[] | .downloads.chromedriver[] | select(.platform=="linux64" and .url | contains($ver))] | first | .url')
+            
+            # 3c. (예외 처리) 정확히 일치하는 버전이 없으면, 가장 가까운 최신 버전(Trunk) 검색
+            if [ -z "$DRIVER_URL" ] || [ "$DRIVER_URL" = "null" ]; then
+                echo "Exact match not found. Finding closest trunk version..."
+                CHROME_TRUNK_VERSION=$(echo "$CHROME_VERSION" | cut -d. -f1-3)
+                DRIVER_URL=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json" | jq -r --arg ver "$CHROME_TRUNK_VERSION" '.versions[] | select(.version | startswith($ver)) | .downloads.chromedriver[] | select(.platform=="linux64") | .url')
+            fi
+
+            # 3d. (최종 예외 처리) 그래도 없으면, 그냥 최신 안정 버전(last known good) 사용
+             if [ -z "$DRIVER_URL" ] || [ "$DRIVER_URL" = "null" ]; then
+                echo "Trunk match not found. Using latest known good stable version..."
+                DRIVER_URL=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json" | jq -r '.channels.Stable.downloads.chromedriver[] | select(.platform=="linux64") | .url')
+             fi
+
+            echo "Downloading ChromeDriver from: $DRIVER_URL"
+            
+            # 3e. 다운로드, 압축 해제, /usr/bin/으로 이동
+            wget -q -O /tmp/chromedriver.zip "$DRIVER_URL"
+            # (중요) 압축 파일 안에 'chromedriver-linux64/chromedriver'처럼 폴더가 있을 수 있음
+            unzip -o /tmp/chromedriver.zip -d /tmp/
+            # (중요) chromedriver 바이너리만 /usr/bin/으로 이동
+            if [ -f "/tmp/chromedriver-linux64/chromedriver" ]; then
+                mv /tmp/chromedriver-linux64/chromedriver /usr/bin/chromedriver
+                rm -rf /tmp/chromedriver-linux64
+            elif [ -f "/tmp/chromedriver" ]; then
+                mv /tmp/chromedriver /usr/bin/chromedriver
+            else
+                echo "Error: Could not find 'chromedriver' binary in unzipped file."
+                exit 1
+            fi
+            
+            chmod +x /usr/bin/chromedriver
+            rm /tmp/chromedriver.zip
+            echo "ChromeDriver installed to /usr/bin/chromedriver"
+
+            # (✨✨✨ 수정 끝 ✨✨✨)
             
             # 1. 배포할 폴더 경로
             export DEPLOY_DIR="/root/PII-Guardian"
