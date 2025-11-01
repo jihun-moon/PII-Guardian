@@ -59,7 +59,7 @@ jobs:
             echo "Installing requirements into venv..."
             venv/bin/pip install -r requirements.txt
             
-            # 4. ✨ (신규) Crontab 스케줄 자동 설정
+            # 4. Crontab 스케줄 자동 설정
             # 배포 시마다 스케줄을 덮어써서 최신 상태를 유지합니다.
             echo "Setting up scheduled tasks (cron jobs)..."
             
@@ -74,9 +74,11 @@ jobs:
             crontab $CRON_FILE
             echo "Cron jobs updated."
             
-            # 5. (기존 4) 대시보드 애플리케이션 재시작
+            # 5. 대시보드 애플리케이션 재시작
             # (참고) pii-guardian.service 파일도 $DEPLOY_DIR/venv/bin/python 을 사용해야 합니다.
             echo "Restarting application service (dashboard)..."
+            # || true는 pii-guardian.service가 최초 등록 전이라 실패해도 배포를 중단하지 않게 합니다.
+            # 하지만 1단계에서 서비스 등록을 완료했다면, || true는 제거해도 좋습니다.
             systemctl restart pii-guardian.service || true
             
             echo "✅ 배포 성공! (Dashboard service restarted, Cron jobs updated)"
