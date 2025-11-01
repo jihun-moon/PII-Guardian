@@ -8,7 +8,6 @@ import json
 import config # (우리의 비밀 키 로드)
 
 # HyperCLOVA X 모델에 보낼 시스템 프롬프트 (명령어)
-# (이 프롬프트가 '전문가 봇'의 성능을 좌우합니다!)
 SYSTEM_PROMPT = """
 당신은 최고의 개인정보 보안 전문가입니다.
 주어진 [문맥]에서 [탐지된 PII]가 발견되었습니다.
@@ -27,17 +26,12 @@ def get_llm_judgment(context, pii_content):
     탐지된 PII가 '유출'인지 '공개'인지 판단합니다.
     """
     
-    # 1. API 엔드포인트 및 헤더 설정
-    # (새로운 API 방식 기준)
     API_URL = config.HCX_API_URL.rstrip('/') + '/v1/chat/completions'
     headers = {
-        # 'nv-...'로 시작하는 API 키 1개만 사용
         "Authorization": f"Bearer {config.HCX_API_KEY}", 
         "Content-Type": "application/json"
     }
 
-    # 2. API에 보낼 데이터 (Payload)
-    # (모델명은 CLOVA Studio에서 사용 가능한 모델로 변경 가능)
     data = {
         "model": "hcx-003",
         "messages": [
@@ -63,7 +57,6 @@ def get_llm_judgment(context, pii_content):
         
         result = response.json()
         
-        # LLM이 생성한 JSON 응답(문자열)을 파싱
         json_content = result['choices'][0]['message']['content']
         llm_answer = json.loads(json_content)
         
