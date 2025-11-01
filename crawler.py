@@ -51,10 +51,10 @@ REGEX_PATTERNS = {
 # (✨✨✨ 핵심 수정 2: 탐지할 URL 변경 ✨✨✨)
 CRAWL_URLS = [
     # (신규) 1단계에서 GitHub에 Push한 텍스트 종합 테스트 파일
-    "https://github.com/jihun-moon/PII-Guardian/blob/main/test_site/test_site_comprehensive.html",
+    "https://github.com/jihun-moon/PII-Guardian/blob/main/test_site/index.html",
     
     # (신규) 1단계에서 GitHub에 Push한 이미지 종합 테스트 파일 (텍스트만 읽기)
-    "https://github.com/jihun-moon/PII-Guardian/blob/main/test_site/test_site_images.html",
+    "https://github.com/jihun-moon/PII-Guardian/blob/main/test_site/page_with_image.html",
 ]
 
 # (✨ 신규) Selenium 드라이버 설정
