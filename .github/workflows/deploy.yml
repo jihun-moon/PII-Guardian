@@ -30,7 +30,23 @@ jobs:
             # 0. 시스템 패키지 설치
             echo "Updating packages..."
             apt-get update
-            apt-get install -y python3-pip git python3-venv
+            # (✨ Selenium/Chrome 추가) python3-venv, wget, gnupg, unzip 설치
+            apt-get install -y python3-pip git python3-venv wget gnupg unzip
+            
+            # (✨ Selenium/Chrome 추가) Google Chrome 설치
+            echo "Installing Google Chrome..."
+            wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add -
+            sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list'
+            apt-get update
+            apt-get install -y google-chrome-stable
+
+            # (✨ Selenium/Chrome 추가) ChromeDriver 설치 (Chrome 버전에 자동 맞춤)
+            echo "Installing ChromeDriver..."
+            LATEST_VERSION=$(wget -q -O - "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$(google-chrome --version | cut -d' ' -f3 | cut -d'.' -f1)")
+            wget -q -O /tmp/chromedriver.zip "https://chromedriver.storage.googleapis.com/$LATEST_VERSION/chromedriver_linux64.zip"
+            unzip -o /tmp/chromedriver.zip -d /usr/local/bin/
+            chmod +x /usr/local/bin/chromedriver
+            echo "Chrome and ChromeDriver installed."
             
             # 1. 배포할 폴더 경로
             export DEPLOY_DIR="/root/PII-Guardian"
@@ -43,8 +59,6 @@ jobs:
             else
               echo "Pulling latest code..."
               cd $DEPLOY_DIR
-              # (✨ 핵심 수정) git pull 충돌 방지
-              # 서버에서 수동으로 변경한 내용이 있더라도, 깃허브의 코드로 강제 덮어쓰기
               git fetch origin
               git reset --hard origin/main
               git pull
@@ -59,6 +73,7 @@ jobs:
             fi
             
             echo "Installing requirements into venv..."
+            # (✨ Selenium/Chrome 추가) 이제 requirements.txt에 있는 selenium이 설치됩니다.
             venv/bin/pip install -r requirements.txt
             
             # 3c. Hugging Face Hub 인증 (파일로도 저장)
@@ -86,5 +101,4 @@ jobs:
             echo "Restarting application service (dashboard)..."
             systemctl restart pii-guardian.service || true
             
-            echo "✅ 배포 성공! (Dashboard service restarted, Cron jobs updated)"
-
+            echo "✅ 배포 성공! (Chrome/ChromeDriver installed, Dashboard restarted, Cron jobs updated)"
