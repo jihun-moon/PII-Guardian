@@ -45,7 +45,7 @@ REGEX_PATTERNS = {
 # (✨✨✨ 핵심 수정: GitHub 'Raw' URL로 변경 ✨✨✨)
 # (Selenium이 필요 없는 '진짜' 원본 파일 주소)
 CRAWL_URLS = [
-    "http://127.0.0.1:5000/"]
+    "http://10.0.1.6:5000/"]
 
 # (✨ Selenium 드라이버 설정 함수 삭제)
 
