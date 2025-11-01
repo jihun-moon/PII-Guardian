@@ -19,6 +19,7 @@ TRAIN_SCRIPT = os.path.join(BASE_PATH, "train.py")
 
 DETECTED_FILE = os.path.join(BASE_PATH, "detected_leaks.csv")
 FEEDBACK_FILE = os.path.join(BASE_PATH, "feedback_data.csv")
+README_FILE = os.path.join(BASE_PATH, "README.md")
 
 LOG_FILES = {
     "Crawler Log (신입 봇)": os.path.join(BASE_PATH, "crawler.log"),
@@ -30,22 +31,15 @@ LOG_FILES = {
 def run_script(script_path):
     """스크립트를 '논블로킹(non-blocking)' 방식으로 백그라운드에서 실행합니다."""
     
-    # (✨ 핵심 수정)
-    # 1. /usr/bin/python3 (시스템) -> {BASE_PATH}/venv/bin/python3 (가상환경)로 변경
-    # 2. 로그가 '실시간 로그' 탭에 보이도록 Crontab과 동일하게 로그 파일로 리디렉션
-    
     python_executable = os.path.join(BASE_PATH, "venv/bin/python3")
     log_file = script_path.replace('.py', '.log') # 예: crawler.py -> crawler.log
     
-    # (중요) venv 파이썬이 존재하는지 확인
     if not os.path.exists(python_executable):
         st.error(f"❌ 실행 실패: 가상 환경({python_executable})을 찾을 수 없습니다.")
         st.error("deploy.yml이 venv를 생성했는지 확인하세요.")
         return
 
     try:
-        # (nohup과 &를 사용해 대시보드가 꺼져도 봇이 계속 돌게 함)
-        # (로그 파일에 표준 출력(>>)과 표준 에러(2>&1)를 모두 저장)
         command = f"nohup {python_executable} {script_path} >> {log_file} 2>&1 &"
         
         subprocess.Popen(command, shell=True)
@@ -55,8 +49,6 @@ def run_script(script_path):
         st.error(f"❌ 실행 실패: {e}")
 
 # --- 3. 로그 읽기 함수 (✨ 캐시 문제 해결) ---
-# (✨ 핵심 수정) 5초마다 캐시가 만료되도록 설정
-# 이렇게 하면 5초마다 디스크에서 파일을 새로 읽어옵니다.
 @st.cache_data(ttl=5)
 def read_log_file(log_path):
     """로그 파일의 최신 100줄을 읽어옵니다."""
@@ -81,35 +73,77 @@ def load_csv(file_path):
             return pd.DataFrame() # 빈 파일일 경우
     return pd.DataFrame()
 
+# --- (✨ 신규) README 마크다운 로드 ---
+@st.cache_data
+def load_readme():
+    if os.path.exists(README_FILE):
+        with open(README_FILE, 'r', encoding='utf-8') as f:
+            return f.read()
+    return "README.md 파일을 찾을 수 없습니다."
+
 # --- 5. Streamlit UI (웹페이지) ---
-st.set_page_config(layout="wide")
-st.title("🤖 AI 팩토리 중앙 관제소")
+st.set_page_config(page_title="PII-Guardian", layout="wide", page_icon="🤖")
+st.title("🤖 PII-Guardian: AI 팩토리 관제소")
 st.write(f"'{BASE_PATH}'에서 실행 중...")
 
-# --- 3개의 탭으로 기능 분리 ---
-tab1, tab2, tab3 = st.tabs(["🕹️ 수동 제어 (On-Demand)", "📊 데이터 뷰어", "📜 실시간 로그"])
+# --- (✨ 수정) 4개의 탭으로 기능 분리 ---
+tab_overview, tab_control, tab_hitl, tab_logs = st.tabs([
+    "🏠 개요", 
+    "🕹️ 수동 제어 (On-Demand)", 
+    "📊 데이터 뷰어 및 수정 (HITL)", 
+    "📜 실시간 로그"
+])
+
+# --- 탭 0: 개요 (README) ---
+with tab_overview:
+    st.header("프로젝트 개요")
+    st.markdown(load_readme(), unsafe_allow_html=True)
 
 # --- 탭 1: 수동 제어 버튼 ---
-with tab1:
+with tab_control:
     st.header("🕹️ AI 팩토리 수동 실행")
     st.warning("Crontab이 자동으로 실행하지만, 지금 당장 테스트/데모가 필요할 때 사용하세요.")
     
+    # (✨ 신규) 실시간 현황판
+    st.subheader("📈 실시간 현황")
+    col_metric1, col_metric2 = st.columns(2)
+    df_detected = load_csv(DETECTED_FILE)
+    df_feedback = load_csv(FEEDBACK_FILE)
+    
+    col_metric1.metric(
+        label="🕵️ 처리 대기 ('신입' 봇 발견)", 
+        value=f"{len(df_detected)} 건",
+        help="crawler.py가 발견하여 detected_leaks.csv에 쌓인 '의심' 목록입니다."
+    )
+    col_metric2.metric(
+        label="✅ 누적 처리 완료 ('전문가' 봇 판단)", 
+        value=f"{len(df_feedback)} 건",
+        help="autolabeler.py가 HyperCLOVA에 물어보고 feedback_data.csv에 누적한 '정답' 목록입니다."
+    )
+    
+    if st.button("현황판 새로고침 🔄"):
+        st.cache_data.clear()
+        st.rerun()
+        
+    st.divider()
+
+    # 봇 실행 버튼
+    st.header("⚙️ 봇 실행기")
     col1, col2, col3 = st.columns(3)
     
     with col1:
         st.subheader("1. '신입' 봇 (크롤러)")
         st.write("'의심' 목록 수집 (1분 소요)")
-        if st.button("Start Crawler Now"):
+        if st.button("Start Crawler Now 🕵️"):
             run_script(CRAWLER_SCRIPT)
-            time.sleep(1) # 버튼 클릭 후 새로고침 시간 확보
-            # (✨ 수정) 버튼을 누르면 캐시를 지우고 새로고침
+            time.sleep(1) 
             st.cache_data.clear()
             st.rerun()
             
     with col2:
         st.subheader("2. '전문가' 봇 (라벨러)")
         st.write("'의심' 목록 -> '정답' 생성 (N분 소요)")
-        if st.button("Start Auto-Labeler Now"):
+        if st.button("Start Auto-Labeler Now 🧑‍🏫"):
             run_script(LABELER_SCRIPT)
             time.sleep(1)
             st.cache_data.clear()
@@ -117,40 +151,75 @@ with tab1:
 
     with col3:
         st.subheader("3. '학습기' (트레이너)")
-        st.write("'정답' -> '경력직 뇌' 훈련 (30초 시뮬레이션)")
-        if st.button("Start Training Now"):
+        st.write("'정답' -> '경력직 뇌' 훈련 (30초 시뮬)")
+        if st.button("Start Training Now 🎓"):
             run_script(TRAIN_SCRIPT)
             time.sleep(1)
             st.cache_data.clear()
             st.rerun()
 
-# --- 탭 2: 데이터 뷰어 (읽기 전용) ---
-with tab2:
-    st.header("📊 데이터 뷰어")
-    if st.button("데이터 새로고침"):
-        st.cache_data.clear() # 캐시 비우기
-        st.rerun() # (✨ 수정) 새로고침(rerun)을 추가하여 버튼이 즉시 반응
-        
-    st.subheader(f"📝 '신입' 봇의 '받은 편지함' ({DETECTED_FILE})")
-    df_detected = load_csv(DETECTED_FILE)
-    st.dataframe(df_detected, use_container_width=True)
-        
-    st.subheader(f"✅ '전문가' 봇이 만든 '누적 정답' ({FEEDBACK_FILE})")
-    df_feedback = load_csv(FEEDBACK_FILE)
-    st.dataframe(df_feedback, use_container_width=True)
+# --- 탭 2: (✨ 수정) 데이터 뷰어 및 수정 (HITL) ---
+with tab_hitl:
+    st.header("📊 데이터 뷰어 및 수정 (Human-in-the-Loop)")
+    st.info("AI가 잘못 판단한 경우, 'llm_label'을 직접 수정하고 '변경사항 저장' 버튼을 누르세요.")
 
-# --- 탭 3: 실시간 로그 뷰어 ---
-with tab3:
+    if st.button("데이터 새로고침 🔄"):
+        st.cache_data.clear()
+        st.rerun()
+        
+    st.subheader(f"✅ '누적 정답' 목록 ({FEEDBACK_FILE})")
+    
+    if 'feedback_df' not in st.session_state:
+        st.session_state.feedback_df = load_csv(FEEDBACK_FILE)
+
+    # (✨ 핵심) 수정 가능한 데이터 에디터 사용
+    edited_df = st.data_editor(
+        st.session_state.feedback_df,
+        num_rows="dynamic",
+        use_container_width=True,
+        # '유출', '공개', '오류' 외에는 선택 못하게 막기
+        column_config={
+            "llm_label": st.column_config.SelectboxColumn(
+                "LLM Label",
+                help="AI의 판단 (유출/공개). 여기서 수정 가능!",
+                options=["유출", "공개", "오류"],
+                required=True,
+            )
+        }
+    )
+
+    if st.button("변경사항 저장 💾", type="primary"):
+        try:
+            edited_df.to_csv(FEEDBACK_FILE, index=False, encoding='utf-8-sig')
+            st.session_state.feedback_df = edited_df
+            st.success("✅ 변경사항이 feedback_data.csv에 성공적으로 저장되었습니다!")
+            # 다른 탭의 캐시도 비워줌
+            st.cache_data.clear()
+            st.rerun()
+        except Exception as e:
+            st.error(f"❌ 저장 실패: {e}")
+
+    st.divider()
+    
+    st.subheader(f"📝 '처리 대기' 목록 ({DETECTED_FILE}) - (읽기 전용)")
+    df_detected_readonly = load_csv(DETECTED_FILE)
+    st.dataframe(df_detected_readonly, use_container_width=True)
+
+
+# --- 탭 3: (✨ 수정) 실시간 로그 뷰어 (Selectbox) ---
+with tab_logs:
     st.header("📜 실시간 로그 뷰어")
     st.write("✨ (참고) 이 탭은 5초마다 자동으로 새로고침됩니다.")
     
-    if st.button("즉시 새로고침"):
-        # (✨ 수정) 캐시를 지우고 새로고침
+    # 로그 파일 선택
+    log_choice_name = st.selectbox("표시할 로그 파일을 선택하세요:", LOG_FILES.keys())
+    
+    if st.button("로그 즉시 새로고침 🔄"):
         st.cache_data.clear()
         st.rerun()
     
-    for log_name, log_path in LOG_FILES.items():
-        st.subheader(log_name)
-        # (✨ 수정) 이제 이 함수는 5초마다 캐시가 만료됨
+    # 선택된 로그 표시
+    if log_choice_name:
+        log_path = LOG_FILES[log_choice_name]
         log_content = read_log_file(log_path)
-        st.text_area(f"Log: {log_path}", log_content, height=300, key=log_path)
+        st.text_area(f"Log: {log_path}", log_content, height=400, key=log_path)
