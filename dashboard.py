@@ -54,7 +54,10 @@ def run_script(script_path):
     except Exception as e:
         st.error(f"❌ 실행 실패: {e}")
 
-# --- 3. 로그 읽기 함수 ---
+# --- 3. 로그 읽기 함수 (✨ 캐시 문제 해결) ---
+# (✨ 핵심 수정) 5초마다 캐시가 만료되도록 설정
+# 이렇게 하면 5초마다 디스크에서 파일을 새로 읽어옵니다.
+@st.cache_data(ttl=5)
 def read_log_file(log_path):
     """로그 파일의 최신 100줄을 읽어옵니다."""
     if not os.path.exists(log_path):
@@ -63,13 +66,13 @@ def read_log_file(log_path):
         with open(log_path, "r", encoding='utf-8') as f:
             lines = f.readlines()
             if not lines:
-                return f"로그 파일이 비어있습니다: {log_path}"
+                return f"로그 파일이 비어있습니다: {log_path}\n(봇이 실행 중이거나, 방금 실행을 시작했을 수 있습니다.)"
             return "".join(lines[-100:]) # 최신 100줄만
     except Exception as e:
         return f"로그 읽기 오류: {e}"
 
 # --- 4. 데이터 읽기 함수 (캐싱 사용) ---
-@st.cache_data(ttl=10) # (수정) 60초 -> 10초로 줄여 더 실시간처럼 보이게 함
+@st.cache_data(ttl=10) # 10초마다 데이터 새로고침
 def load_csv(file_path):
     if os.path.exists(file_path):
         try:
@@ -99,6 +102,8 @@ with tab1:
         if st.button("Start Crawler Now"):
             run_script(CRAWLER_SCRIPT)
             time.sleep(1) # 버튼 클릭 후 새로고침 시간 확보
+            # (✨ 수정) 버튼을 누르면 캐시를 지우고 새로고침
+            st.cache_data.clear()
             st.rerun()
             
     with col2:
@@ -107,6 +112,7 @@ with tab1:
         if st.button("Start Auto-Labeler Now"):
             run_script(LABELER_SCRIPT)
             time.sleep(1)
+            st.cache_data.clear()
             st.rerun()
 
     with col3:
@@ -115,6 +121,7 @@ with tab1:
         if st.button("Start Training Now"):
             run_script(TRAIN_SCRIPT)
             time.sleep(1)
+            st.cache_data.clear()
             st.rerun()
 
 # --- 탭 2: 데이터 뷰어 (읽기 전용) ---
@@ -122,7 +129,7 @@ with tab2:
     st.header("📊 데이터 뷰어")
     if st.button("데이터 새로고침"):
         st.cache_data.clear() # 캐시 비우기
-        st.rerun()
+        st.rerun() # (✨ 수정) 새로고침(rerun)을 추가하여 버튼이 즉시 반응
         
     st.subheader(f"📝 '신입' 봇의 '받은 편지함' ({DETECTED_FILE})")
     df_detected = load_csv(DETECTED_FILE)
@@ -135,10 +142,15 @@ with tab2:
 # --- 탭 3: 실시간 로그 뷰어 ---
 with tab3:
     st.header("📜 실시간 로그 뷰어")
-    if st.button("로그 새로고침"):
+    st.write("✨ (참고) 이 탭은 5초마다 자동으로 새로고침됩니다.")
+    
+    if st.button("즉시 새로고침"):
+        # (✨ 수정) 캐시를 지우고 새로고침
+        st.cache_data.clear()
         st.rerun()
     
     for log_name, log_path in LOG_FILES.items():
         st.subheader(log_name)
+        # (✨ 수정) 이제 이 함수는 5초마다 캐시가 만료됨
         log_content = read_log_file(log_path)
         st.text_area(f"Log: {log_path}", log_content, height=300, key=log_path)
