@@ -12,7 +12,7 @@ jobs:
           printf '%b\n' "${{ secrets.NCP_SSH_KEY }}" > /tmp/ncp_key
           chmod 600 /tmp/ncp_key
 
-      # 2. 'root' 사용자로 접속하여 배포
+      # 2. 'root' 사용자로 접속하여 배포 (디버그 모드)
       - name: Deploy to NCP VM via ssh (as root)
         env:
           NCP_HOST: ${{ secrets.NCP_HOST }}
@@ -20,7 +20,12 @@ jobs:
           NCP_USERNAME: ${{ secrets.NCP_USERNAME }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
-          ssh -i /tmp/ncp_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${NCP_USERNAME}@${NCP_HOST} \
+          # --- 디버그 라인 ---
+          echo "Attempting connection as: ${NCP_USERNAME}@${NCP_HOST}"
+          # ---
+          
+          # 'ssh' 명령어에 -v (verbose) 플래그를 추가하여 상세 로그를 출력합니다.
+          ssh -v -i /tmp/ncp_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${NCP_USERNAME}@${NCP_HOST} \
             "GITHUB_REPOSITORY=${GITHUB_REPOSITORY} bash -s" <<'EOF'
             
             # (중요) 스크립트 실행 중 하나라도 실패하면 즉시 중단합니다.
