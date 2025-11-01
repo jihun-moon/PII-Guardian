@@ -12,21 +12,17 @@ jobs:
           printf '%b\n' "${{ secrets.NCP_SSH_KEY }}" > /tmp/ncp_key
           chmod 600 /tmp/ncp_key
 
-      # 2. 'root' 사용자로 접속하여 배포 (✨ appleboy/ssh-action으로 변경)
+      # 2. 'root' 사용자로 접속하여 배포 (appleboy/ssh-action 사용)
       - name: Deploy to NCP VM via ssh-action (as root)
-        # (수정) 'uses'를 사용하여 ssh-action 플러그인을 지정합니다.
         uses: appleboy/ssh-action@master
-        # (수정) 'env:' 블록을 'with:' 블록 안으로 이동시킵니다.
         with:
           host: ${{ secrets.NCP_HOST }}
           username: ${{ secrets.NCP_USERNAME }}
           key: ${{ secrets.NCP_SSH_KEY }}
-          # (수정) GITHUB_REPOSITORY와 HF_TOKEN을 원격 서버로 전달합니다.
+          # (중요) GITHUB_REPOSITORY와 HF_TOKEN을 원격 서버로 전달합니다.
           envs: GITHUB_REPOSITORY,HF_TOKEN
-          # (수정) 'run:' 대신 'script:'를 사용합니다.
-          # 'here-document' (<<'EOF') 부분이 모두 제거되어 YAML 오류가 해결됩니다.
           script: |
-            # (중요) 스크립트 실행 중 하나라도 실패하면 즉시 중단합니다.
+            # 스크립트 실행 중 하나라도 실패하면 즉시 중단합니다.
             set -e
 
             echo "Connecting as: $(whoami)"
@@ -53,43 +49,42 @@ jobs:
             # 3. 의존성 설치 (가상 환경 사용)
             cd $DEPLOY_DIR
             
-            # 3a. 'venv' 가상 환경 폴더가 없으면 생성
             if [ ! -d "venv" ]; then
               echo "Creating virtual environment at $DEPLOY_DIR/venv..."
               python3 -m venv venv
             fi
             
-            # 3b. 가상 환경 내부의 pip를 사용하여 패키지 설치
             echo "Installing requirements into venv..."
             venv/bin/pip install -r requirements.txt
             
-            # 3c. (신규) Hugging Face Hub 인증
-            # 'transformers' 라이브러리가 자동으로 이 파일을 읽어 인증합니다.
+            # 3c. Hugging Face Hub 인증 (파일로도 저장)
             echo "Setting up Hugging Face token..."
             mkdir -p /root/.cache/huggingface
-            # $HF_TOKEN 변수는 envs 옵션을 통해 전달받았습니다.
             echo -n "$HF_TOKEN" > /root/.cache/huggingface/token
             
             # 4. Crontab 스케줄 자동 설정
-            # 배포 시마다 스케줄을 덮어써서 최신 상태를 유지합니다.
             echo "Setting up scheduled tasks (cron jobs)..."
-            
-            # 스케줄 내용을 임시 파일에 저장
-            # (중요) 시스템 python3이 아닌, venv 안의 python을 사용해야 합니다.
             CRON_FILE="/tmp/pii_guardian_cron"
-            echo "0 * * * * $DEPLOY_DIR/venv/bin/python $DEPLOY_DIR/crawler.py >> $DEPLOY_DIR/crawler.log 2>&1" > $CRON_FILE
-            echo "0 1 * * * $DEPLOY_DIR/venv/bin/python $DEPLOY_DIR/autolabeler.py >> $DEPLOY_DIR/autolabeler.log 2>&1" >> $CRON_FILE
-            echo "0 2 * * * $DEPLOY_DIR/venv/bin/python $DEPLOY_DIR/train.py >> $DEPLOY_DIR/train.log 2>&1" >> $CRON_FILE
             
-            # root 유저의 Crontab을 이 파일 내용으로 교체
+            # (✨ 핵심 수정) 
+            # python 실행 전에 'export HF_TOKEN=$HF_TOKEN'을 추가하여
+            # crontab 환경에서도 환경 변수를 강제로 주입합니다.
+            # $HF_TOKEN 값은 'envs:' 옵션을 통해 전달됩니다.
+            
+            # (수정 1) crawler.py
+            echo "0 * * * * export HF_TOKEN=${HF_TOKEN} && $DEPLOY_DIR/venv/bin/python $DEPLOY_DIR/crawler.py >> $DEPLOY_DIR/crawler.log 2>&1" > $CRON_FILE
+            
+            # (수정 2) autolabeler.py (동일하게 적용)
+            echo "0 1 * * * export HF_TOKEN=${HF_TOKEN} && $DEPLOY_DIR/venv/bin/python $DEPLOY_DIR/autolabeler.py >> $DEPLOY_DIR/autolabeler.log 2>&1" >> $CRON_FILE
+            
+            # (수정 3) train.py (동일하게 적용)
+            echo "0 2 * * * export HF_TOKEN=${HF_TOKEN} && $DEPLOY_DIR/venv/bin/python $DEPLOY_DIR/train.py >> $DEPLOY_DIR/train.log 2>&1" >> $CRON_FILE
+            
             crontab $CRON_FILE
             echo "Cron jobs updated."
             
             # 5. 대시보드 애플리케이션 재시작
-            # (참고) pii-guardian.service 파일도 $DEPLOY_DIR/venv/bin/python 을 사용해야 합니다.
             echo "Restarting application service (dashboard)..."
-            # || true는 pii-guardian.service가 최초 등록 전이라 실패해도 배포를 중단하지 않게 합니다.
-            # 하지만 1단계에서 서비스 등록을 완료했다면, || true는 제거해도 좋습니다.
             systemctl restart pii-guardian.service || true
             
             echo "✅ 배포 성공! (Dashboard service restarted, Cron jobs updated)"
