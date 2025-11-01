@@ -1,5 +1,5 @@
 # 🕵️ (봇 1) '신입' 봇. '의심' 내역 수집 -> detected_leaks.csv
-# (v2.21 - 정규식 유연성 강화 + 로그 중복 제거 + URL 수정)
+# (v3.1 - Selenium 제거, Requests 복귀, Raw URL 스캔, 문맥(Context) 로직 수정)
 
 import requests
 from bs4 import BeautifulSoup
@@ -10,9 +10,7 @@ import time
 from transformers import pipeline, AutoTokenizer, AutoModelForTokenClassification
 from urllib.parse import urljoin 
 import logging
-from selenium import webdriver # (✨ 신규)
-from selenium.webdriver.chrome.options import Options # (✨ 신규)
-from selenium.webdriver.chrome.service import Service # (✨ 신규)
+# (✨ Selenium 관련 모듈 모두 삭제)
 
 # 우리 헬퍼 및 설정 파일 임포트
 import config
@@ -32,57 +30,25 @@ FEEDBACK_FILE = os.path.join(BASE_PATH, 'feedback_data.csv')
 MODEL_PATH = os.path.join(BASE_PATH, 'my-ner-model')
 BASE_MODEL = 'klue/roberta-base' 
 
-# (✨✨✨ 핵심 수정 v2.21: 정규식 유연성 강화 ✨✨✨)
+# (✨ v2.21 정규식)
 REGEX_PATTERNS = {
-    # 기존
-    'EMAIL': r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', # (이메일은 이미 유연함)
-    
-    # (수정) 010 (괄호, 점, 공백, 없음 모두 지원)
-    'PHONE': r'\b\(?(010)\)?[-.)\s]?\d{3,4}[-.\s]?\d{4}\b',
-    
-    # 신규 (금융/민감정보)
-    'RRN': r'\b\d{6}[- ]?[1-4]\d{6}\b', # (주민번호 - 하이픈/공백/없음 모두 지원)
-    'CREDIT_CARD': r'\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b', # (카드번호 - 하이픈/공백/없음 모두 지원)
-    'ACCOUNT_NUM': r'\b\d{3}[- ]?\d{2,6}[- ]?\d{2,7}\b', # (계좌번호 - 오탐은 LLM이 처리)
-    'API_KEY': r'\b(sk|pk|im-key-prod)-[a-zA-Z0-9_,-]{20,}\b', # API 키
-    'INTERNAL_IP': r'\b(192\.168\.\d{1,3}\.\d{1,3})\b|\b(10\.\d{1,3}\.\d{1,3}\.\d{1,3})\b', # 내부 IP
-    
-    # (수정) 일반 전화 (지역번호 괄호, 1588-xxxx, 1588 xxxx, 1588xxxx 모두 지원)
-    'PHONE_GENERAL': r'\b\(?(0[2-9][0-9]?)\)?[-.)\s]?\d{3,4}[-.\s]?\d{4}\b|\b(15\d{2}|16\d{2})[-.\s]?\d{4}\b'
+    'EMAIL': r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
+    'PHONE': r'\b\(?(010)\)?[-.)\s]*\d{3,4}[-.\s]*\d{4}\b',
+    'RRN': r'\b\d{6}[- ]*[1-4]\d{6}\b', 
+    'CREDIT_CARD': r'\b\d{4}[- ]*\d{4}[- ]*\d{4}[- ]*\d{4}\b', 
+    'ACCOUNT_NUM': r'\b\d{3}[- ]*\d{2,6}[- ]*\d{2,7}\b', 
+    'API_KEY': r'\b(sk|pk|im-key-prod)-[a-zA-Z0-9_,-]{20,}\b',
+    'INTERNAL_IP': r'\b(192\.168\.\d{1,3}\.\d{1,3})\b|\b(10\.\d{1,3}\.\d{1,3}\.\d{1,3})\b',
+    'PHONE_GENERAL': r'\b\(?(0[2-9][0-9]?)\)?[-.)\s]*\d{3,4}[-.\s]*\d{4}\b|\b(15\d{2}|16\d{2})[-.\s]*\d{4}\b'
 }
 
-# (✨ 탐지할 URL - 올바른 주소)
+# (✨✨✨ 핵심 수정: GitHub 'Raw' URL로 변경 ✨✨✨)
+# (Selenium이 필요 없는 '진짜' 원본 파일 주소)
 CRAWL_URLS = [
     "https://github.com/jihun-moon/PII-Guardian/blob/main/test_site/index.html",
-    "https://github.com/jihun-moon/PII-Guardian/blob/main/test_site/page_with_image.html",
-]
+    "https://github.com/jihun-moon/PII-Guardian/blob/main/test_site/page_with_image.html"]
 
-# (✨ 신규) Selenium 드라이버 설정
-def setup_selenium_driver():
-    """서버 환경에서 Selenium Chrome 드라이버를 설정합니다."""
-    chrome_options = Options()
-    
-    # (✨ 수정) v2.9 deploy 스크립트가 설치한 경로
-    chrome_options.binary_location = "/usr/bin/google-chrome-stable" 
-
-    chrome_options.add_argument("--headless") # (브라우저 창을 띄우지 않음)
-    chrome_options.add_argument("--no-sandbox") # (root 권한으로 실행 시 필수)
-    chrome_options.add_argument("--disable-dev-shm-usage") # (메모리 부족 문제 방지)
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
-
-    # (✨✨✨ 핵심 수정 v2.11 ✨✨✨)
-    # deploy.yml (v2.9)이 설치한 최종 경로로 수정
-    service = Service(executable_path="/usr/bin/chromedriver") 
-    
-    try:
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-        return driver
-    except Exception as e:
-        logging.error(f"❌ [Selenium 오류] Chrome 드라이버 로드 실패: {e}")
-        logging.error("NCP 서버에 Chrome과 ChromeDriver가 정상 설치되었는지 확인하세요.")
-        logging.error("(`deploy.yml`이 성공적으로 실행되었는지 GitHub Actions 탭에서 확인하세요.)")
-        return None
+# (✨ Selenium 드라이버 설정 함수 삭제)
 
 # --- 2. 봇의 '뇌' (AI 모델) 로드 ---
 def load_ner_pipeline():
@@ -128,17 +94,24 @@ def load_ner_pipeline():
     ner_pipeline = pipeline("ner", model=model, tokenizer=tokenizer, device=-1, aggregation_strategy="simple")
     return ner_pipeline
 
-# --- 3. 유출 탐지 함수 (텍스트용) ---
+# --- 3. (✨✨✨ 핵심 수정 v3.1: '문맥' 로직 수정 ✨✨✨) ---
 def find_leaks_in_text(text, ner_pipeline):
     """주어진 텍스트에서 RegEx와 NER로 PII를 찾습니다."""
     leaks = []
     if not text: 
         return leaks
         
-    context_preview = text.strip().replace('\n', ' ').replace('\r', ' ')[0:300]
+    # (✨ 수정) 페이지 전체 300자가 아닌, PII 주변의 문맥을 저장합니다.
+    # context_preview = text.strip().replace('\n', ' ').replace('\r', ' ')[0:300] # (버그가 있던 코드 삭제)
     
     for pii_type, pattern in REGEX_PATTERNS.items():
         for match in re.finditer(pattern, text):
+            
+            # (✨ 신규) PII를 중심으로 앞뒤 150자, 총 300자 내외의 문맥을 생성합니다.
+            start = max(0, match.start() - 150)
+            end = min(len(text), match.end() + 150)
+            context_preview = text[start:end].strip().replace('\n', ' ').replace('\r', ' ')
+            
             is_duplicate = False
             for existing_leak in leaks:
                 if existing_leak['content'] == match.group(0):
@@ -147,56 +120,67 @@ def find_leaks_in_text(text, ner_pipeline):
             
             if not is_duplicate:
                 leaks.append({
-                    'type': pii_type.replace('_GENERAL', ''), # (PHONE_GENERAL -> PHONE)
+                    'type': pii_type.replace('_GENERAL', ''),
                     'content': match.group(0),
-                    'context': context_preview
+                    'context': context_preview # (✨ 이제 올바른 문맥이 저장됨)
                 })
             
     try:
-        ner_results = ner_pipeline(text[:512]) 
+        # (✨ 수정) 페이지 상단 512 토큰이 아닌, 텍스트 전체를 스캔합니다.
+        ner_results = ner_pipeline(text) 
+        
         for entity in ner_results:
             if entity['entity_group'] in ['PS', 'LC', 'OG', 'PII']: 
+                
+                # (✨ 신규) NER 결과에 대해서도 PII 중심의 문맥을 생성합니다.
+                start = max(0, entity['start'] - 150)
+                end = min(len(text), entity['end'] + 150)
+                context_preview = text[start:end].strip().replace('\n', ' ').replace('\r', ' ')
+
                 leak_type = entity['entity_group']
                 if leak_type == 'PS': leak_type = 'PERSON (AI)'
                 if leak_type == 'LC': leak_type = 'LOCATION (AI)'
                 if leak_type == 'OG': leak_type = 'ORGANIZATION (AI)'
-                if leak_type == 'PII': leak_type = 'PII (Custom AI)' # (경력직 뇌가 탐지)
+                if leak_type == 'PII': leak_type = 'PII (Custom AI)'
                 
                 leaks.append({
                     'type': leak_type,
                     'content': entity['word'],
-                    'context': context_preview
+                    'context': context_preview # (✨ 이제 올바른 문맥이 저장됨)
                 })
     except Exception as e:
         logging.error(f"❌ [AI 분석 에러] {e}")
             
     return leaks
 
-# --- 4. Selenium 크롤링 함수 (OCR 비활성화) ---
-def crawl_web_page(page_url, ner_pipeline, driver):
-    """(기능 1) Selenium으로 동적 웹페이지를 크롤링합니다. (OCR은 비활성화)"""
-    logging.info(f"🕵️ [Selenium 크롤링] 시작: {page_url}")
+# --- 4. (✨ 수정) `requests` 기반 크롤링 함수 (OCR 비활성화) ---
+def crawl_web_page(page_url, ner_pipeline):
+    """(기능 1) `requests`로 정적 웹페이지를 크롤링합니다. (OCR은 비활성화)"""
+    logging.info(f"🕵️ [Requests 크롤링] 시작: {page_url}")
     leaks_found = []
     
     try:
-        driver.get(page_url)
-        time.sleep(5) 
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'}
+        response = requests.get(page_url, headers=headers, timeout=10)
+        response.raise_for_status()
         
-        html_content = driver.page_source
+        # Raw URL이므로 `response.text`가 순수 HTML입니다.
+        html_content = response.text
+        
+        # (✨ 핵심) 4-1. HTML 주석()을 포함한 원본 텍스트 전체 스캔
+        leaks_found.extend(find_leaks_in_text(html_content, ner_pipeline))
+        
+        # (✨ 핵심) 4-2. HTML 태그가 제거된, 눈에 보이는 텍스트 스캔
         soup = BeautifulSoup(html_content, 'html.parser')
-        
-        if not soup.body: 
-            return []
-            
-        page_text = soup.body.get_text(separator=' ')
+        page_text = soup.get_text(separator=' ', strip=True)
         leaks_found.extend(find_leaks_in_text(page_text, ner_pipeline))
-        
+
         # (OCR은 여전히 비활성화)
         
         return leaks_found
         
     except Exception as e:
-        logging.error(f"❌ [Selenium 크롤링 에러] {page_url} 처리 실패: {e}")
+        logging.error(f"❌ [Requests 크롤링 에러] {page_url} 처리 실패: {e}")
         return []
 
 # --- 5. (주석 처리) 깃허브 검색 함수 ---
@@ -232,8 +216,10 @@ def save_to_csv(all_leaks):
     all_known_keys = processed_keys.union(pending_keys)
     
     is_truly_new = new_df.apply(lambda row: (row['content'], row['url']) not in all_known_keys, axis=1)
-    final_new_df = new_df[is_truly_new]
     
+    # (✨ 수정) 중복 제거 (find_leaks_in_text가 2번 호출되므로)
+    final_new_df = new_df[is_truly_new].drop_duplicates(subset=['content', 'url'])
+
     if final_new_df.empty:
         logging.info("✅ 새로 발견된 '의심' 내역이 없습니다. (모두 기존 목록에 존재)")
         return
@@ -252,29 +238,21 @@ if __name__ == "__main__":
         exit()
     logging.info("🧠 AI 뇌 로드 완료.")
 
-    # (✨ 신규) Selenium 드라이버 1회 실행
-    logging.info("🚗 Selenium (Chrome) 드라이버를 로드하는 중...")
-    driver = setup_selenium_driver()
-    if driver is None:
-        logging.error("❌ Selenium 드라이버 로드에 실패하여 '신입' 봇을 종료합니다.")
-        exit()
-    logging.info("🚗 Selenium 드라이버 로드 완료.")
+    # (✨ Selenium 드라이버 로드 코드 삭제)
     
     total_leaks_found = []
     
-    # --- Selenium을 사용한 실제 웹사이트 크롤링 ---
-    logging.info(f"🛰️ [Selenium 크롤링] {len(CRAWL_URLS)}개의 URL을 스캔합니다. (OCR 비활성화)")
+    # (✨ `requests` 기반 크롤링으로 변경)
+    logging.info(f"🛰️ [Requests 크롤링] {len(CRAWL_URLS)}개의 URL을 스캔합니다. (OCR 비활성화)")
     for url in CRAWL_URLS:
-        leaks = crawl_web_page(url, ner_brain, driver) 
+        leaks = crawl_web_page(url, ner_brain) 
         for leak in leaks:
             leak['url'] = url 
-            leak['repo'] = 'web-crawl' # (repo를 'web-crawl'로 고정)
+            leak['repo'] = 'web-crawl'
         total_leaks_found.extend(leaks)
         time.sleep(1) # (사이트 부하 방지)
 
-    # (✨ 신규) 드라이버 종료
-    driver.quit()
-    logging.info("🚗 Selenium 드라이버 종료 완료.")
+    # (✨ Selenium 드라이버 종료 코드 삭제)
 
     # (깃허브 API 검색은 여전히 주석 처리)
             
