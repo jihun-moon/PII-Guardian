@@ -34,9 +34,10 @@ REGEX_PATTERNS = {
 }
 
 # (크롤링할 대상)
+# 🚨 (수정) 사용자 이름을 'jihun0948'에서 'jihun-moon'으로 바로잡았습니다.
 TEST_URLS = [
-    'https://jihun0948.github.io/PII-Guardian/test_site/index.html',
-    'https://jihun0948.github.io/PII-Guardian/test_site/page_with_image.html'
+    'https://jihun-moon.github.io/PII-Guardian/test_site/index.html',
+    'https://jihun-moon.github.io/PII-Guardian/test_site/page_with_image.html'
 ]
 
 # (깃허브 검색어 - 주석 처리됨)
@@ -288,4 +289,5 @@ if __name__ == "__main__":
         save_to_csv(total_leaks_found)
     
     print("🤖 1. '신입' 봇(Crawler) 작동 완료.")
+
 
