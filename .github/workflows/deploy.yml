@@ -58,7 +58,8 @@ jobs:
             venv/bin/pip install -r requirements.txt
             
             # 3c. Hugging Face Hub 인증 (파일로도 저장)
-            echo "Setting up Hugging Face token..."
+            # (✨ 여기가 핵심입니다. crawler.py가 이 파일을 직접 읽습니다.)
+            echo "Setting up Hugging Face token file..."
             mkdir -p /root/.cache/huggingface
             echo -n "$HF_TOKEN" > /root/.cache/huggingface/token
             
@@ -67,18 +68,17 @@ jobs:
             CRON_FILE="/tmp/pii_guardian_cron"
             
             # (✨ 핵심 수정) 
-            # python 실행 전에 'export HF_TOKEN=$HF_TOKEN'을 추가하여
-            # crontab 환경에서도 환경 변수를 강제로 주입합니다.
-            # $HF_TOKEN 값은 'envs:' 옵션을 통해 전달됩니다.
+            # crawler.py가 토큰 파일을 직접 읽으므로
+            # 복잡한 'export' 구문을 제거하고 명령어를 단순화합니다.
             
             # (수정 1) crawler.py
-            echo "0 * * * * export HF_TOKEN=${HF_TOKEN} && $DEPLOY_DIR/venv/bin/python $DEPLOY_DIR/crawler.py >> $DEPLOY_DIR/crawler.log 2>&1" > $CRON_FILE
+            echo "0 * * * * $DEPLOY_DIR/venv/bin/python $DEPLOY_DIR/crawler.py >> $DEPLOY_DIR/crawler.log 2>&1" > $CRON_FILE
             
-            # (수정 2) autolabeler.py (동일하게 적용)
-            echo "0 1 * * * export HF_TOKEN=${HF_TOKEN} && $DEPLOY_DIR/venv/bin/python $DEPLOY_DIR/autolabeler.py >> $DEPLOY_DIR/autolabeler.log 2>&1" >> $CRON_FILE
+            # (수정 2) autolabeler.py
+            echo "0 1 * * * $DEPLOY_DIR/venv/bin/python $DEPLOY_DIR/autolabeler.py >> $DEPLOY_DIR/autolabeler.log 2>&1" >> $CRON_FILE
             
-            # (수정 3) train.py (동일하게 적용)
-            echo "0 2 * * * export HF_TOKEN=${HF_TOKEN} && $DEPLOY_DIR/venv/bin/python $DEPLOY_DIR/train.py >> $DEPLOY_DIR/train.log 2>&1" >> $CRON_FILE
+            # (수정 3) train.py
+            echo "0 2 * * * $DEPLOY_DIR/venv/bin/python $DEPLOY_DIR/train.py >> $DEPLOY_DIR/train.log 2>&1" >> $CRON_FILE
             
             crontab $CRON_FILE
             echo "Cron jobs updated."
