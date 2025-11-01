@@ -20,6 +20,7 @@ import ocr_helper
 # --- 1. 설정값 ---
 # (데이터 저장 파일)
 CSV_FILE = 'detected_leaks.csv'
+FEEDBACK_FILE = 'feedback_data.csv' # 🧑‍🏫 (봇 2)의 '정답지'
 # (NER 모델 경로)
 MODEL_PATH = 'my-ner-model' # 🎓 (봇 3)이 훈련시킬 뇌
 BASE_MODEL = 'klue/roberta-base-ner' # 🧠 기본 뇌 (Hugging Face)
@@ -53,7 +54,8 @@ def load_ner_pipeline():
         tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
         model = AutoModelForTokenClassification.from_pretrained(MODEL_PATH)
         print(f"✅ '경력직' AI 뇌({MODEL_PATH}) 로드 성공!")
-    except Exception:
+    # (수정) Exception -> OSError로 변경 (더 명확한 오류 처리)
+    except OSError: 
         # 2순위: 1순위가 실패하면 '신입' 뇌(klue/roberta)를 로드
         print(f"⚠️ '경력직' AI 뇌({MODEL_PATH})를 찾을 수 없습니다. '신입' 뇌({BASE_MODEL})를 로드합니다.")
         tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
@@ -83,7 +85,8 @@ def find_leaks_in_text(text, ner_pipeline):
             
     # 2. AI(NER)로 추가 탐지 (예: 사람 이름)
     try:
-        ner_results = ner_pipeline(text)
+        # (개선) 텍스트가 너무 길면 NER이 오류를 낼 수 있으므로 512자로 제한
+        ner_results = ner_pipeline(text[:512]) 
         for entity in ner_results:
             # klue/roberta-base-ner는 'PS'(사람이름)을 탐지
             if entity['entity_group'] == 'PS':
@@ -106,6 +109,11 @@ def crawl_test_site(url, ner_pipeline):
         response = requests.get(url, timeout=10)
         response.encoding = 'utf-8' 
         soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # (개선) body가 없는 경우를 대비
+        if not soup.body:
+            return []
+            
         page_text = soup.body.get_text(separator=' ')
         
         # 4-1. 텍스트에서 유출 탐지
@@ -115,7 +123,10 @@ def crawl_test_site(url, ner_pipeline):
         images = soup.find_all('img')
         for img in images:
             try:
-                img_url = img['src']
+                img_url = img.get('src') # .get()으로 안전하게 접근
+                if not img_url:
+                    continue
+                    
                 # (상대 경로를 절대 경로로 변환)
                 if not img_url.startswith('http'):
                     img_url = urljoin(url, img_url)
@@ -129,7 +140,7 @@ def crawl_test_site(url, ner_pipeline):
                         print(f"🚨 [OCR 탐지!] {img_url} 에서 {len(image_leaks)}건 발견!")
                         leaks_found.extend(image_leaks)
             except Exception as e:
-                print(f"❌ [이미지 에러] {img['src']} 스캔 실패: {e}")
+                print(f"❌ [이미지 에러] {img.get('src')} 스캔 실패: {e}")
 
         return leaks_found
             
@@ -165,7 +176,8 @@ def search_github_api(query, ner_pipeline):
             
             code_context = ""
             if 'text_matches' in item and item['text_matches']:
-                 code_context = item['text_matches'][0]['fragment']
+                 # (수정) text_matches는 여러 개일 수 있으므로 모두 합칩니다.
+                code_context = " ... ".join([match['fragment'] for match in item['text_matches']])
             
             if code_context:
                 leaks = find_leaks_in_text(code_context, ner_pipeline)
@@ -182,7 +194,7 @@ def search_github_api(query, ner_pipeline):
         print(f"❌ [GitHub API 에러] {e}")
         return []
 
-# --- 6. CSV 저장 함수 ---
+# --- 6. CSV 저장 함수 (✨ 로직 대폭 개선) ---
 def save_to_csv(all_leaks):
     """탐지된 모든 내역을 '의심' 목록(CSV)에 '추가'합니다."""
     if not all_leaks:
@@ -190,12 +202,39 @@ def save_to_csv(all_leaks):
             
     new_df = pd.DataFrame(all_leaks)
     
+    # (✨ 개선 1) 이미 '정답지'에 있는 내역은 제외합니다.
+    try:
+        if os.path.exists(FEEDBACK_FILE):
+            feedback_df = pd.read_csv(FEEDBACK_FILE)
+            # '정답지'에 있는 (content, url) 쌍을 만듭니다.
+            # (url이 없는 'test-site'의 경우를 대비해 fillna 사용)
+            feedback_df['url'] = feedback_df['url'].fillna('test-site-url') # 임시 값
+            new_df['url'] = new_df['url'].fillna('test-site-url') # 임시 값
+            
+            feedback_keys = set(zip(feedback_df['content'], feedback_df['url']))
+            
+            # (content, url)이 '정답지'에 없는 것만 필터링
+            is_new = new_df.apply(lambda row: (row['content'], row['url']) not in feedback_keys, axis=1)
+            new_df = new_df[is_new]
+            
+            if len(new_df) == 0:
+                print("✅ 새로 발견된 '의심' 내역이 없습니다. (모두 '정답지'에 이미 존재)")
+                return
+            else:
+                print(f"✨ '정답지'와 비교 후, {len(new_df)}건의 '신규' 내역 발견!")
+
+    except Exception as e:
+        print(f"⚠️ '정답지'({FEEDBACK_FILE}) 비교 중 오류 발생 (파일이 비어있을 수 있음): {e}")
+
+    # (✨ 개선 2) '의심' 목록(detected_leaks.csv) 내의 중복도 제거합니다.
     if os.path.exists(CSV_FILE):
-        # 기존 파일이 있으면, 중복된 내용을 제거하고 추가
-        existing_df = pd.read_csv(CSV_FILE)
-        combined_df = pd.concat([existing_df, new_df])
-        # 'content'와 'url'이 모두 똑같은 중복은 제거
-        final_df = combined_df.drop_duplicates(subset=['content', 'url'])
+        try:
+            existing_df = pd.read_csv(CSV_FILE)
+            combined_df = pd.concat([existing_df, new_df])
+            # 'content'와 'url'이 모두 똑같은 중복은 제거
+            final_df = combined_df.drop_duplicates(subset=['content', 'url'])
+        except pd.errors.EmptyDataError: # 파일이 비어있는 경우
+            final_df = new_df
     else:
         final_df = new_df
         
@@ -223,7 +262,7 @@ if __name__ == "__main__":
     # (선택) 실제 GitHub API 검색
     # 🚨 나중에 추가하고 싶으면 이 아래 주석(#)을 풀면 됩니다!
     # print("🛰️ [GitHub API] 검색을 시작합니다...")
-    # if not config.GITHUB_TOKEN:
+    # if not hasattr(config, 'GITHUB_TOKEN') or not config.GITHUB_TOKEN:
     #     print("⚠️ config.py에 GITHUB_TOKEN이 없습니다. GitHub 검색을 건너뜁니다.")
     # else:
     #     for q in GITHUB_QUERIES:
