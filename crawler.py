@@ -38,9 +38,7 @@ REGEX_PATTERNS = {
 
 # --- 탐지할 URL (이제 dcinside.com도 가능) ---
 CRAWL_URLS = [
-    "https://www.dcinside.com/", # (동적 사이트)
-    "https://comsoft.daegu.ac.kr/comsoft/professor.do", # (정적 사이트)
-]
+    "https://www.dcinside.com/"]
 
 # (✨ 신규) Selenium 드라이버 설정
 def setup_selenium_driver():
