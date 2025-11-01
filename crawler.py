@@ -22,8 +22,10 @@ import ocr_helper
 # --- 1. 설정값 ---
 CSV_FILE = 'detected_leaks.csv'     # (In_1) '전문가' 봇이 처리할 받은 편지함
 FEEDBACK_FILE = 'feedback_data.csv' # (In_2) '학습기' 봇이 처리할 받은 편지함
-MODEL_PATH = 'my-ner-model'
-BASE_MODEL = 'klue/roberta-base-ner'
+MODEL_PATH = 'my-ner-model'         # (출력) 훈련된 '경력직' 뇌
+
+# (✨ 오타 수정) 'klue/roberta-base-ner' (X) -> 'klue/roberta-base' (O)
+BASE_MODEL = 'klue/roberta-base' # 🧠 기본 뇌 (Hugging Face)
 
 REGEX_PATTERNS = {
     'EMAIL': r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
@@ -31,8 +33,8 @@ REGEX_PATTERNS = {
 }
 
 TEST_URLS = [
-    'https://jihun-moon.github.io/PII-Guardian/test_site/index.html',
-    'https://jihun-moon.github.io/PII-Guardian/test_site/page_with_image.html'
+    'https://github.com/jihun-moon/PII-Guardian/blob/main/test_site/index.html',
+    'https://github.com/jihun-moon/PII-Guardian/blob/main/test_site/page_with_image.html'
 ]
 
 GITHUB_QUERIES = [
@@ -40,12 +42,10 @@ GITHUB_QUERIES = [
     '"IM뱅크" "비밀번호"',
 ]
 
-# --- 2. 봇의 '뇌' (AI 모델) 로드 (✨ Blocker 1 & 2 해결) ---
+# --- 2. 봇의 '뇌' (AI 모델) 로드 (✨ 최종 수정) ---
 def load_ner_pipeline():
     """봇의 '뇌'(NER 모델)를 로드합니다."""
     
-    # (✨ 핵심 수정)
-    # Crontab/대시보드 환경 문제를 모두 해결하기 위해,
     # deploy.yml이 생성한 토큰 '파일'을 직접 읽어서 사용합니다.
     token_file_path = "/root/.cache/huggingface/token"
     hf_token = None
@@ -56,7 +56,6 @@ def load_ner_pipeline():
             if hf_token:
                  print("✅ Hugging Face 토큰 파일을 성공적으로 읽었습니다.")
             else:
-                 # (중요) deploy.yml이 빈 파일을 생성한 경우 (GitHub Secret Value가 비어있음)
                  print("⚠️ [경고] /root/.cache/huggingface/token 파일이 비어있습니다.")
                  print("⚠️ GitHub Secret 'HF_TOKEN'에 값이 올바르게 입력되었는지 확인하세요!")
         except Exception as e:
@@ -72,7 +71,6 @@ def load_ner_pipeline():
     
     if not hf_token:
         print("❌ [치명적 오류] Hugging Face 토큰을 찾을 수 없어 모델을 로드할 수 없습니다.")
-        # 인증 토큰이 없으면 어차피 실패하므로, 여기서 강력하게 None을 반환합니다.
         return None 
 
     try:
@@ -80,13 +78,22 @@ def load_ner_pipeline():
         tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH, token=hf_token)
         model = AutoModelForTokenClassification.from_pretrained(MODEL_PATH, token=hf_token)
         print(f"✅ '경력직' AI 뇌({MODEL_PATH}) 로드 성공!")
-    except OSError: 
-        # 2순위: 1순위가 실패하면 '신입' 뇌(klue/roberta)를 로드
-        print(f"⚠️ '경력직' AI 뇌({MODEL_PATH})를 찾을 수 없습니다. '신입' 뇌({BASE_MODEL})를 로드합니다.")
         
-        # (✨ 핵심 3) '신입' 뇌 로드 시, 인증을 위해 토큰을 명시적으로 전달합니다.
-        tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, token=hf_token)
-        model = AutoModelForTokenClassification.from_pretrained(BASE_MODEL, token=hf_token)
+    # (✨ 핵심 수정) 
+    # except OSError: -> except Exception:
+    # '경력직' 뇌 로드에 "어떤 이유로든" (OSError, ValueError 등) 실패하면
+    # '신입' 뇌를 로드하도록 합니다.
+    except Exception as e: 
+        print(f"⚠️ '경력직' AI 뇌({MODEL_PATH}) 로드 실패. 원인: {e}")
+        print(f"➡️ '신입' 뇌({BASE_MODEL})를 로드합니다.")
+        
+        # 2순위: '신입' 뇌(BASE_MODEL)를 로드
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, token=hf_token)
+            model = AutoModelForTokenClassification.from_pretrained(BASE_MODEL, token=hf_token)
+        except Exception as e2:
+            print(f"❌ [치명적 오류] '신입' 뇌({BASE_MODEL}) 로드에도 실패했습니다: {e2}")
+            return None
         
     # AI 모델을 사용하기 쉽게 '파이프라인'으로 만듦
     ner_pipeline = pipeline("ner", model=model, tokenizer=tokenizer, device=-1, aggregation_strategy="simple")
@@ -97,7 +104,6 @@ def find_leaks_in_text(text, ner_pipeline):
     """주어진 텍스트에서 RegEx와 NER로 PII를 찾습니다."""
     leaks = []
     
-    # (문맥 저장을 위해 텍스트 길이 제한)
     context_preview = text.strip().replace('\n', ' ').replace('\r', ' ')[0:300]
     
     # 1. 정규식(RegEx)으로 먼저 탐지
@@ -109,15 +115,20 @@ def find_leaks_in_text(text, ner_pipeline):
                 'context': context_preview
             })
             
-    # 2. AI(NER)로 추가 탐지 (예: 사람 이름)
+    # 2. AI(NER)로 추가 탐지
     try:
-        # (개선) 텍스트가 너무 길면 NER이 오류를 낼 수 있으므로 512자로 제한
         ner_results = ner_pipeline(text[:512]) 
         for entity in ner_results:
-            # klue/roberta-base-ner는 'PS'(사람이름)을 탐지
-            if entity['entity_group'] == 'PS':
+            # klue/roberta-base는 'PS'(사람), 'LC'(장소), 'OG'(기관) 등을 탐지
+            if entity['entity_group'] in ['PS', 'LC', 'OG']:
+                leak_type = entity['entity_group']
+                # 'PS' -> 'PERSON (AI)'처럼 좀 더 친절하게 변경
+                if leak_type == 'PS': leak_type = 'PERSON (AI)'
+                if leak_type == 'LC': leak_type = 'LOCATION (AI)'
+                if leak_type == 'OG': leak_type = 'ORGANIZATION (AI)'
+                
                 leaks.append({
-                    'type': 'PERSON (AI)',
+                    'type': leak_type,
                     'content': entity['word'],
                     'context': context_preview
                 })
@@ -142,26 +153,27 @@ def crawl_test_site(url, ner_pipeline):
         # 4-1. 텍스트
         leaks_found.extend(find_leaks_in_text(page_text, ner_pipeline))
         
-        # 4-2. 이미지(OCR)
-        images = soup.find_all('img')
-        for img in images:
-            try:
-                img_url = img.get('src')
-                if not img_url: continue
+        # 4-2. (✨ 수정) OCR 오류 및 요청으로 인해 이미지 스캔 기능 주석 처리
+        # print("🖼️  이미지 스캔 기능을 주석 처리합니다.")
+        # images = soup.find_all('img')
+        # for img in images:
+        #     try:
+        #         img_url = img.get('src')
+        #         if not img_url: continue
                 
-                if not img_url.startswith('http'):
-                    img_url = urljoin(url, img_url)
+        #         if not img_url.startswith('http'):
+        #             img_url = urljoin(url, img_url)
                 
-                print(f"🖼️  이미지 스캔 중... {img_url}")
-                ocr_text = ocr_helper.get_ocr_text(img_url)
+        #         print(f"🖼️  이미지 스캔 중... {img_url}")
+        #         ocr_text = ocr_helper.get_ocr_text(img_url)
                 
-                if ocr_text:
-                    image_leaks = find_leaks_in_text(ocr_text, ner_pipeline)
-                    if image_leaks:
-                        print(f"🚨 [OCR 탐지!] {img_url} 에서 {len(image_leaks)}건 발견!")
-                        leaks_found.extend(image_leaks)
-            except Exception as e:
-                print(f"❌ [이미지 에러] {img.get('src')} 스캔 실패: {e}")
+        #         if ocr_text:
+        #             image_leaks = find_leaks_in_text(ocr_text, ner_pipeline)
+        #             if image_leaks:
+        #                 print(f"🚨 [OCR 탐지!] {img_url} 에서 {len(image_leaks)}건 발견!")
+        #                 leaks_found.extend(image_leaks)
+        #     except Exception as e:
+        #         print(f"❌ [이미지 에러] {img.get('src')} 스캔 실패: {e}")
         return leaks_found
     except Exception as e:
         print(f"❌ [에러] {url} 크롤링 실패: {e}")
@@ -207,7 +219,7 @@ def search_github_api(query, ner_pipeline):
         print(f"❌ [GitHub API 에러] {e}")
         return []
 
-# --- 6. CSV 저장 함수 (✨ Inefficiency 1 해결) ---
+# --- 6. CSV 저장 함수 ---
 def get_existing_keys(file_path):
     """CSV 파일에서 (content, url) 키 세트를 로드합니다."""
     if not os.path.exists(file_path):
@@ -259,7 +271,6 @@ if __name__ == "__main__":
     print("🧠 봇의 AI 뇌(NER 모델)를 로드하는 중...")
     ner_brain = load_ner_pipeline()
     
-    # (✨ 핵심) 뇌 로드(인증)에 실패하면 봇 작동 중지
     if ner_brain is None:
         print("❌ AI 뇌 로드에 실패하여 '신입' 봇을 종료합니다.")
         exit() # 스크립트 종료
@@ -276,15 +287,15 @@ if __name__ == "__main__":
             leak['repo'] = 'test-site'
         total_leaks_found.extend(leaks)
         
-    # (선택) 실제 GitHub API 검색
-    print("🛰️ [GitHub API] 검색을 시작합니다...")
-    if not hasattr(config, 'GITHUB_TOKEN') or not config.GITHUB_TOKEN:
-        print("⚠️ config.py에 GITHUB_TOKEN이 없습니다. GitHub 검색을 건너뜁니다.")
-    else:
-        for q in GITHUB_QUERIES:
-            leaks = search_github_api(q, ner_brain)
-            total_leaks_found.extend(leaks)
-            time.sleep(5) # (중요) API 제한을 피하기 위해 5초간 휴식
+    # (선택) (✨ 수정) GitHub API 오류로 인해 주석 처리
+    # print("🛰️ [GitHub API] 검색을 시작합니다...")
+    # if not hasattr(config, 'GITHUB_TOKEN') or not config.GITHUB_TOKEN:
+    #     print("⚠️ config.py에 GITHUB_TOKEN이 없습니다. GitHub 검색을 건너뜁니다.")
+    # else:
+    #     for q in GITHUB_QUERIES:
+    #         leaks = search_github_api(q, ner_brain)
+    #         total_leaks_found.extend(leaks)
+    #         time.sleep(5) # (중요) API 제한을 피하기 위해 5초간 휴식
             
     # 최종 결과 저장
     if total_leaks_found:
