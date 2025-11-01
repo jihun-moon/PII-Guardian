@@ -20,11 +20,10 @@ import config
 import ocr_helper 
 
 # --- 1. 설정값 ---
-CSV_FILE = 'detected_leaks.csv'     # (In_1) '전문가' 봇이 처리할 받은 편지함
-FEEDBACK_FILE = 'feedback_data.csv' # (In_2) '학습기' 봇이 처리할 받은 편지함
-MODEL_PATH = 'my-ner-model'         # (출력) 훈련된 '경력직' 뇌
-
-# (✨ 오타 수정) 'klue/roberta-base-ner' (X) -> 'klue/roberta-base' (O)
+BASE_PATH = "/root/PII-Guardian" # (중요) deploy.yml의 DEPLOY_DIR과 일치
+CSV_FILE = os.path.join(BASE_PATH, 'detected_leaks.csv')
+FEEDBACK_FILE = os.path.join(BASE_PATH, 'feedback_data.csv')
+MODEL_PATH = os.path.join(BASE_PATH, 'my-ner-model')
 BASE_MODEL = 'klue/roberta-base' # 🧠 기본 뇌 (Hugging Face)
 
 REGEX_PATTERNS = {
@@ -32,15 +31,18 @@ REGEX_PATTERNS = {
     'PHONE': r'\b010[-.\s]?\d{4}[-.\s]?\d{4}\b',
 }
 
-TEST_URLS = [
-    'https://github.com/jihun-moon/PII-Guardian/blob/main/test_site/index.html',
-    'https://github.com/jihun-moon/PII-Guardian/blob/main/test_site/page_with_image.html'
+# (✨ 핵심 수정) 
+# 웹 URL 대신, 서버 로컬의 'test_site' 폴더를 직접 읽습니다.
+TEST_FILES = [
+    os.path.join(BASE_PATH, 'test_site/index.html'),
+    os.path.join(BASE_PATH, 'test_site/page_with_image.html')
 ]
 
-GITHUB_QUERIES = [
-    '"ncp_api_key"',
-    '"IM뱅크" "비밀번호"',
-]
+# (✨ 주석 처리) 
+# GITHUB_QUERIES = [
+#     '"ncp_api_key"',
+#     '"IM뱅크" "비밀번호"',
+# ]
 
 # --- 2. 봇의 '뇌' (AI 모델) 로드 (✨ 최종 수정) ---
 def load_ner_pipeline():
@@ -137,15 +139,16 @@ def find_leaks_in_text(text, ner_pipeline):
             
     return leaks
 
-# --- 4. 크롤링 함수 (테스트 사이트용) ---
-def crawl_test_site(url, ner_pipeline):
-    """(기능 1) 하나의 '테스트 URL'을 크롤링합니다."""
-    print(f"🕵️ [테스트 사이트] 크롤링 시작: {url}")
+# --- 4. 크롤링 함수 (✨ 로컬 파일 읽기) ---
+def crawl_local_file(file_path, ner_pipeline):
+    """(기능 1) 하나의 '로컬 테스트 파일'을 읽습니다."""
+    print(f"🕵️ [로컬 테스트] 파일 읽기 시작: {file_path}")
     leaks_found = []
     try:
-        response = requests.get(url, timeout=10)
-        response.encoding = 'utf-8' 
-        soup = BeautifulSoup(response.text, 'html.parser')
+        with open(file_path, 'r', encoding='utf-8') as f:
+            html_content = f.read()
+            
+        soup = BeautifulSoup(html_content, 'html.parser')
         
         if not soup.body: return []
         page_text = soup.body.get_text(separator=' ')
@@ -153,71 +156,19 @@ def crawl_test_site(url, ner_pipeline):
         # 4-1. 텍스트
         leaks_found.extend(find_leaks_in_text(page_text, ner_pipeline))
         
-        # 4-2. (✨ 수정) OCR 오류 및 요청으로 인해 이미지 스캔 기능 주석 처리
+        # 4-2. (✨ 주석 처리) OCR 기능
         # print("🖼️  이미지 스캔 기능을 주석 처리합니다.")
-        # images = soup.find_all('img')
-        # for img in images:
-        #     try:
-        #         img_url = img.get('src')
-        #         if not img_url: continue
-                
-        #         if not img_url.startswith('http'):
-        #             img_url = urljoin(url, img_url)
-                
-        #         print(f"🖼️  이미지 스캔 중... {img_url}")
-        #         ocr_text = ocr_helper.get_ocr_text(img_url)
-                
-        #         if ocr_text:
-        #             image_leaks = find_leaks_in_text(ocr_text, ner_pipeline)
-        #             if image_leaks:
-        #                 print(f"🚨 [OCR 탐지!] {img_url} 에서 {len(image_leaks)}건 발견!")
-        #                 leaks_found.extend(image_leaks)
-        #     except Exception as e:
-        #         print(f"❌ [이미지 에러] {img.get('src')} 스캔 실패: {e}")
+        
         return leaks_found
+    except FileNotFoundError:
+        print(f"❌ [에러] {file_path} 파일을 찾을 수 없습니다.")
+        return []
     except Exception as e:
-        print(f"❌ [에러] {url} 크롤링 실패: {e}")
+        print(f"❌ [에러] {file_path} 파일 처리 실패: {e}")
         return []
 
-# --- 5. 깃허브 검색 함수 ---
-def search_github_api(query, ner_pipeline):
-    """(기능 2) GitHub API로 '실제' 소스 코드를 검색합니다."""
-    print(f"🛰️ [GitHub API] 검색 시작: {query}")
-    
-    API_URL = "https://api.github.com/search/code"
-    headers = {
-        "Authorization": f"token {getattr(config, 'GITHUB_TOKEN', '')}", 
-        "Accept": "application/vnd.github.v3.text-match+json" 
-    }
-    params = {'q': query, 'sort': 'indexed', 'order': 'desc', 'per_page': 10} 
-    total_leaks = []
-    try:
-        response = requests.get(API_URL, headers=headers, params=params, timeout=10)
-        response.raise_for_status() 
-        results = response.json()
-        
-        if 'items' not in results or not results['items']:
-            print("✅ [GitHub API] 탐지된 내역 없음.")
-            return []
-            
-        for item in results['items']:
-            file_url = item['html_url']
-            repo_name = item['repository']['full_name']
-            code_context = " ... ".join([match['fragment'] for match in item.get('text_matches', [])])
-            
-            if code_context:
-                leaks = find_leaks_in_text(code_context, ner_pipeline)
-                for leak in leaks:
-                    leak['url'] = file_url 
-                    leak['repo'] = repo_name
-                total_leaks.extend(leaks)
-        
-        if total_leaks:
-            print(f"🚨 [GitHub 탐지!] 총 {len(total_leaks)}건 발견!")
-        return total_leaks
-    except Exception as e:
-        print(f"❌ [GitHub API 에러] {e}")
-        return []
+# --- 5. (✨ 주석 처리) 깃허브 검색 함수 ---
+# def search_github_api(query, ner_pipeline): ...
 
 # --- 6. CSV 저장 함수 ---
 def get_existing_keys(file_path):
@@ -279,23 +230,16 @@ if __name__ == "__main__":
     
     total_leaks_found = []
     
-    # (필수) 테스트 사이트 크롤링
-    for url in TEST_URLS:
-        leaks = crawl_test_site(url, ner_brain)
+    # (✨ 수정) 로컬 테스트 파일 읽기
+    for file_path in TEST_FILES:
+        leaks = crawl_local_file(file_path, ner_brain)
         for leak in leaks:
-            leak['url'] = url 
+            leak['url'] = os.path.basename(file_path) # url 대신 파일명(index.html) 기록
             leak['repo'] = 'test-site'
         total_leaks_found.extend(leaks)
         
-    # (선택) (✨ 수정) GitHub API 오류로 인해 주석 처리
+    # (✨ 주석 처리) GitHub API 검색
     # print("🛰️ [GitHub API] 검색을 시작합니다...")
-    # if not hasattr(config, 'GITHUB_TOKEN') or not config.GITHUB_TOKEN:
-    #     print("⚠️ config.py에 GITHUB_TOKEN이 없습니다. GitHub 검색을 건너뜁니다.")
-    # else:
-    #     for q in GITHUB_QUERIES:
-    #         leaks = search_github_api(q, ner_brain)
-    #         total_leaks_found.extend(leaks)
-    #         time.sleep(5) # (중요) API 제한을 피하기 위해 5초간 휴식
             
     # 최종 결과 저장
     if total_leaks_found:

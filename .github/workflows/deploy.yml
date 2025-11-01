@@ -43,6 +43,10 @@ jobs:
             else
               echo "Pulling latest code..."
               cd $DEPLOY_DIR
+              # (✨ 핵심 수정) git pull 충돌 방지
+              # 서버에서 수동으로 변경한 내용이 있더라도, 깃허브의 코드로 강제 덮어쓰기
+              git fetch origin
+              git reset --hard origin/main
               git pull
             fi
             
@@ -58,7 +62,6 @@ jobs:
             venv/bin/pip install -r requirements.txt
             
             # 3c. Hugging Face Hub 인증 (파일로도 저장)
-            # (✨ 여기가 핵심입니다. crawler.py가 이 파일을 직접 읽습니다.)
             echo "Setting up Hugging Face token file..."
             mkdir -p /root/.cache/huggingface
             echo -n "$HF_TOKEN" > /root/.cache/huggingface/token
@@ -66,10 +69,6 @@ jobs:
             # 4. Crontab 스케줄 자동 설정
             echo "Setting up scheduled tasks (cron jobs)..."
             CRON_FILE="/tmp/pii_guardian_cron"
-            
-            # (✨ 핵심 수정) 
-            # crawler.py가 토큰 파일을 직접 읽으므로
-            # 복잡한 'export' 구문을 제거하고 명령어를 단순화합니다.
             
             # (수정 1) crawler.py
             echo "0 * * * * $DEPLOY_DIR/venv/bin/python $DEPLOY_DIR/crawler.py >> $DEPLOY_DIR/crawler.log 2>&1" > $CRON_FILE

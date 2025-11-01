@@ -12,8 +12,10 @@ import os
 import llm_helper # (우리의 LLM 헬퍼 로드)
 import time
 
-DETECTED_FILE = 'detected_leaks.csv' # (In_1) '받은 편지함'
-FEEDBACK_FILE = 'feedback_data.csv' # (In_2) '보낸 편지함'
+# (✨ 경로 수정) BASE_PATH 기준으로 경로 재설정
+BASE_PATH = "/root/PII-Guardian" 
+DETECTED_FILE = os.path.join(BASE_PATH, 'detected_leaks.csv')
+FEEDBACK_FILE = os.path.join(BASE_PATH, 'feedback_data.csv')
 
 def main():
     print("🤖 2. '전문가' 봇(AutoLabeler) 작동 시작...")
@@ -46,7 +48,6 @@ def main():
     new_feedbacks = []
 
     # 3. '의심' 목록을 "전부" 처리
-    # (crawler.py가 이미 중복을 걸러줬으므로, 여기선 'processed.log'가 필요 없음)
     for index, row in detected_df.iterrows():
         print(f"🧠 LLM(HyperCLOVA)에게 판단 요청: {row['content']}")
         
