@@ -1,121 +1,187 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="author" content="김개발, 010-3333-4444, dev.kim@internal-server.com">
-    <title>메가 시나리오 테스트 (v4.0 Final Challenge)</title>
-    <style>
-        /* 2. CSS 주석 내 유출 (매우 흔한 실수) */
-        /* - 임시 담당자: 박지원 (010-9999-8888)
-           - 백업 이메일: jiwon.park.bak@gmail.com
-           - 테스트용 카드(마스터): 5123-4567-8901-2345
-        */
-        body { font-family: sans-serif; line-height: 1.6; padding: 20px; max-width: 900px; margin: auto; background: #f4f4f4; }
-        h1, h2, h3 { color: #333; border-bottom: 2px solid #ccc; padding-bottom: 5px;}
-        .content { background: #fff; border: 1px solid #ddd; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-        .comment-section { background: #fdfdfd; border: 1px solid #eee; padding: 10px; margin-top: 10px; }
-        .footer { text-align: center; color: #777; margin-top: 30px; }
-        .code { background: #2d2d2d; color: #c0c0c0; padding: 15px; border-radius: 5px; overflow-x: auto; font-family: 'Courier New', Courier, monospace; }
-        .warning { color: red; font-weight: bold; }
-    </style>
-</head>
-<body>
-    <h1>메가 시나리오 테스트 (v4.0 Final Challenge)</h1>
+그럼요. LLM이 더 다양한 상황과 교묘한 패턴을 학습할 수 있도록, HTML뿐만 아니라 여러 파일 형식과 시나리오를 조합한 `v5.0` 학습 데이터셋을 만들어 드릴게요.
 
-    <div id="user-profile-widget"
-         data-user-contact="010-7777-1234"
-         data-user-email="hidden.user@naver.com"
-         data-user-info-json='{"name":"이수진", "address":"서울시 강남구 테헤란로 123", "ssn_last_7":"2345678"}'
-         data-order-id="ORD-20251101-0001"> <p>사용자 정보 위젯 (속성에 데이터 숨김)</p>
-    </div>
-    
-    <input type="hidden" id="session_user_rrn" value="880101-1234567">
-    <input type="hidden" id="session_user_phone" value="010-8801-1234">
+이번에는 **Markdown, JSON, SQL, YAML, 순수 텍스트(채팅 로그)** 등 개발자가 실제로 접할 수 있는 다양한 환경을 가정했습니다.
 
-    <div class="content">
-        <h2>(시나리오 2) 공식적인 '공개' 정보 (오탐 방지)</h2>
-        <p>LLM이 문맥을 보고 '공개(Public)'로 판단해야 합니다.</p>
-        <ul>
-            <li>(주)PII-Guardian 고객센터: 1588-0000 (대표번호)</li>
-            <li>IR(투자) 문의: 02-123-4567 (공개된 유선)</li>
-            <li>채용 문의: recruit@pii-guardian.com (공개 이메일)</li>
-            <li>특허 출원 번호: 10-2024-0123456 (형태가 비슷하지만 PII 아님)</li>
-            <li>본사 주소: (41911) 대구광역시 중구 달구벌대로 2095 (공개 주소)</li>
-            <li>사업자등록번호: 123-45-67890 (공개 정보)</li>
-            <li>ISO 인증번호: KOR-9001-12345 (오탐)</li>
-        </ul>
-    </div>
+-----
 
-    <div class="content">
-        <h2>(시나리오 3) Q&A 게시판 (새로운 PII 유형)</h2>
-        <p>사용자들이 실수로 남긴 다양한 형태의 PII입니다. '유출(Leak)'로 판단되어야 합니다.</p>
-        
-        <div class="comment-section">
-            <p><strong>작성자: 최민준</strong></p>
-            <p>배송이 안 오네요. 제 <span class="warning">상세 주소</span>는 '대구광역시 수성구 OO로 12길 34, OO아파트 101동 202호' 입니다. 
-               제 <span class="warning">운전면허</span> 번호는 <span class="warning">13-00-123456-78 (서울)</span> 입니다. 확인 바랍니다.</p>
-        </div>
-        <div class="comment-section">
-            <p><strong>작성자: Mr. Smith (외국인)</strong></p>
-            <p>I cannot verify my account. My passport no. is <span class="warning">M98765432</span>. 
-               Also, my Alien Registration Number (외국인등록번호) is <span class="warning">950101-5123456</span>.</p>
-        </div>
-        <div class="comment-section">
-            <p><strong>작성자: 쪼개기_신공</strong></p>
-            <p>제 폰번호 앞자리는 <span class="warning">010</span> 이고요...</p>
-        </div>
-        <div class="comment-section" style="margin-top: 5px;">
-            <p><strong>작성자: 쪼개기_신공 (답글)</strong></p>
-            <p>아, 빠뜨렸네요. 뒷자리는 <span class="warning">1234의 5678</span> 입니다. (정보 쪼개기)</p>
-        </div>
-    </div>
+## 🤖 LLM 학습용 멀티 포맷 시나리오 (v5.0)
 
-    <div class="content">
-        <h2>(시나리오 4) 개발자 로그 및 코드 (고급 오탐 + 유출)</h2>
-        <p>LLM이 '유출'과 '오탐'을 정확히 구분해야 합니다.</p>
-        <div class="code">
-<pre>
-[INFO] DB Connection Test...
-[INFO] Connecting to 10.0.0.5 (Internal DB) ... [유출]
-[INFO] User 'admin' login success from 192.168.1.100 ... [유출]
+### 시나리오 1: Markdown (`README.md`)
 
-[DEBUG] User Auth Token (Base64): <span class="warning">eyJ1c2VyIjoi7JWI7JaR7IucIiwicGhvbmUiOiIwMTAtMTIzNC01Njc4In0=</span>
-[INFO] Request URL: /api/v1/getUser?email=<span class="warning">user@example.com</span>&phone=<span class="warning">01044445555</span>
+GitHub 저장소의 `README` 파일입니다. 개발자가 실수로 개인 연락처나 API 키를 포함하는 경우가 많습니다.
 
-[ERROR] Transaction failed for card 4100-0000-0000-0000 (Test Card) ... [공개/샘플]
-[DEBUG] Sample RRN: 990101-1000000 ... [공개/샘플]
-[INFO] Order Processing: ORD-880101-1234567 (주문번호, 주민번호와 패턴 동일) ... [공개]
-[INFO] Git Commit Hash: 901231f1a2b3c4d5e6 (해시, 주민번호 앞자리와 유사) ... [공개]
-[DEBUG] User ID: 950101 (단순 ID, 외국인등록번호 앞자리와 유사) ... [공개]
-[INFO] Jenkins Build #123456789 success. (단순 숫자) ... [공개]
+````markdown
+# 🚀 My Project (v1.2.3)
 
-[CONFIG] Loading SSH Key...
-<span class="warning">-----BEGIN RSA PRIVATE KEY-----
-MIIEowIBAAKCAQEA... (중략) ...
------END RSA PRIVATE KEY-----</span>
-</pre>
-        </div>
-    </div>
-    
-    <div class="content">
-        <h2>(시나리오 5) 교묘한 난독화(Obfuscation)</h2>
-        <p>탐지 봇을 피하기 위한 고급 패턴입니다. '유출'로 판단되어야 합니다.</p>
-        <ul>
-            <li>제 <span class="warning">전번</span>은 <span class="warning">영일영.팔팔팔팔.구구구구</span> 입니다. (한글+점)</li>
-            <li>급해서 <span class="warning">계번</span> 남깁니다: <span class="warning">우리 1002-123-456789</span> (하이픈)</li>
-            <li>이메일: <span class="warning">my_email (at) gmail [dot] com</span> (봇 회피용)</li>
-            <li>카드: <span class="warning">450O-1234-5678-9O12</span> (숫자 0 대신 영문 O 사용)</li>
-            <img src="fake_qr.png" 
-                 alt="제 개인 QR코드입니다. 연락처: 010-3456-7890" 
-                 style="display:none;">
-            <button onclick="alert('임시 비밀번호: myPassword123!\n담당자: 010-0000-0000');">클릭(주의)</button>
-        </ul>
-    </div>
+이 프로젝트는 ... (중략)
 
-    <div class="footer">
-        (주) PII-Guardian | 대표: 홍길동 | 사업자등록번호: 123-45-67890 (하이픈)<br>
-        (LLM이 '홍길동'을 보고 '대표'라는 문맥을 파악하여 '공개'로 판단해야 함 - 이름 탐지기능 추가 시 중요)
-    </div>
-</body>
-</html>
+## 🔧 설정 방법 (v3.0 기준)
+
+1.  `config.ini` 파일을 생성합니다.
+2.  아래 코드를 복사하여 붙여넣으세요.
+
+```ini
+[Database]
+Host = localhost
+Port = 3306 ; (오탐: 포트번호)
+User = root
+; 임시 비밀번호: <span class="warning">MyS3cret_DB_Pass!</span> (유출)
+
+[API]
+; 네이버 API (테스트용)
+ClientID = <span class="warning">_aBcDeFg123456XyZ</span> (유출)
+ClientSecret = <span class="warning">G7h8J9k0L1</span> (유출)
+````
+
+## 🐛 버그 리포트
+
+  - 이슈 트래커: `https://github.com/my-project/issues`
+  - 긴급 연락: \<span class="warning"\>010-8888-9999\</span\> (프로젝트 관리자) (유출)
+  - 이메일 문의: [support@my-project.com](mailto:support@my-project.com) (공개)
+  - 담당자 개인 이메일: [dev.choi@gmail.com](mailto:\<span class="warning"\>dev.choi@gmail.com\</span\>) (유출)
+
+<!-- end list -->
+
+````
+
+---
+
+### 시나리오 2: Raw JSON (`api_response.json`)
+
+서버에서 클라이언트로 전송된 API 응답 데이터입니다. 민감한 정보가 그대로 노출된 상황입니다.
+
+```json
+{
+  "status": "success",
+  "request_id": "req-9a8b7c6d-5e4f-3a2b-1c0d", // (오탐: UUID)
+  "data": [
+    {
+      "userId": 101,
+      "username": "User1",
+      "contact": {
+        "email": "<span class=\"warning\">user1@gmail.com</span>",
+        "phone": "<span class=\"warning\">010-1111-2222</span>"
+      },
+      "shipping_address": {
+        "street": "<span class=\"warning\">서울시 강남구 테헤란로 123</span>",
+        "detail": "<span class=\"warning\">OO빌딩 501호</span>",
+        "zipcode": "06123" // (오탐: 공개된 우편번호)
+      },
+      "last_login_ip": "<span class=\"warning\">211.123.45.67</span>" // (유출: IP 주소)
+    },
+    {
+      "userId": 102,
+      "username": "User2",
+      "contact": {
+        "email": "<span class=\"warning\">user2@naver.com</span>",
+        "phone": "<span class=\"warning\">010-3333-4444</span>"
+      },
+      "shipping_address": {
+        "street": "<span class=\"warning\">대구광역시 중구 동성로 15</span>",
+        "detail": "<span class=\"warning\">XX아파트 102동 304호</span>",
+        "zipcode": "41911" // (오탐: 공개된 우편번호)
+      },
+      "last_login_ip": "<span class=\"warning\">192.168.0.1</span>" // (유출: 내부 IP도 포함)
+    }
+  ],
+  "version": "v2.1.5" // (오탐: 버전 정보)
+}
+````
+
+-----
+
+### 시나리오 3: 텍스트 로그 (`chat_log.txt`)
+
+고객센터 채팅 로그입니다. 사용자가 문제를 해결하기 위해 개인정보를 입력하는 상황입니다. (오타, 줄임말 포함)
+
+```text
+[14:30:01] 고객: 안녕하세요. 로그인이 안돼요.
+[14:30:15] 상담원: 아이디(이메일)를 알려주시겠어요?
+[14:30:45] 고객: 제 <span class="warning">이멜주소</span>는 <span class="warning">my_id_123@gamil.com</span> 입니다. (오타: gmail -> gamil)
+[14:31:02] 상담원: my_id_123@gmail.com 말씀이시죠? 본인 확인을 위해 휴대폰 번호 뒤 4자리 부탁드립니다.
+[14:31:30] 고객: 아뇨 <span class="warning">gamil.com</span> 맞아요;;;
+[14:31:40] 고객: 폰번은 <span class="warning">010-1234-5678</span> 이고요.
+[14:32:01] 상담원: (시스템) 해당 이메일을 찾을 수 없습니다.
+[14:32:30] 고객: 아 답답하네. 그럼 이걸로 찾아주세요.
+[14:32:35] 고객: <span class="warning">주민번호 900101-1234567</span> 입니다.
+[14:33:00] 상담원: 고객님, 주민번호는 채팅창에 입력하시면 안 됩니다...
+[14:33:15] 고객: 환불 <span class="warning">계좌(신한) 110-123-456789</span> 로 돈이나 보내주세요.
+[14:34:00] 고객: 주문번호 1234567-20251101 입니다. (오탐: 주문번호)
+```
+
+-----
+
+### 시나리오 4: SQL 덤프 (`user_backup.sql`)
+
+개발자가 실수로 DB 백업 파일의 `INSERT` 구문을 복사/붙여넣기 한 상황입니다.
+
+```sql
+-- 2025-11-01 User table backup snippet
+-- (이름은 탐지 제외)
+
+INSERT INTO `users` (`user_id`, `name`, `email`, `phone_number`, `ssn`, `password_hash`, `address`) VALUES
+(101, '김철수', '<span class="warning">chulsoo.kim@test.com</span>', '<span class="warning">010-1234-5678</span>', '<span class="warning">850101-1234567</span>', 'a1b2c3d4...', '<span class="warning">서울시 마포구 월드컵북로 1</span>'),
+(102, '박영희', '<span class="warning">younghee.park@dev.net</span>', '<span class="warning">010-9876-5432</span>', '<span class="warning">920202-2345678</span>', 'e5f6g7h8...', '<span class="warning">부산시 해운대구 우동 2</span>');
+
+-- (오탐: ID 및 상태 코드)
+INSERT INTO `user_status` (`status_id`, `user_id`, `status_code`, `last_updated`) VALUES
+(201, 101, 900101, '2025-11-01 10:00:00'),
+(202, 102, 123456, '2025-11-01 10:01:00');
+```
+
+-----
+
+### 시나리오 5: YAML 설정 (`config.yml`)
+
+서버 배포용 설정 파일입니다. DB 접속 정보, API 시크릿 키 등이 포함되어 있습니다.
+
+```yaml
+# Production Server Configuration (v4.1.0)
+server:
+  port: 8080 # (오탐: 포트)
+  log_level: "info"
+  version: "4.1.0-prod" # (오탐: 버전)
+
+database:
+  type: "mysql"
+  host: "<span class=\"warning\">prod-db.internal.my-service.com</span>" # (유출: 내부 호스트)
+  username: "admin_prod"
+  password: "<span class=\"warning\">Prod!@#DB_P@ssw0rd_9876</span>" # (유출: DB 비밀번호)
+
+api_secrets:
+  # AWS (치명적)
+  aws_access_key: "<span class=\"warning\">AKIAI44QH8DHBEXAMPLE</span>"
+  aws_secret_key: "<span class=\"warning\">jMy/Secret/Key/Example+123456789</span>"
+  
+  # JWT (치명적)
+  jwt_secret: "<span class=\"warning\">super-long-and-secret-key-for-jwt-token-signing-12345</span>"
+```
+
+-----
+
+### 시나리오 6: 고급 난독화 텍스트 (`notes.txt`)
+
+봇 탐지를 피하기 위해 의도적으로 변형된 패턴입니다. (가장 높은 난이도)
+
+```text
+- 회의록 (2025.11.01)
+- 담당자 변경 건
+- 기존: 이팀장 (연락처: <span class="warning">010-일이삼사-오육칠팔</span>) (한글 혼용)
+- 신규: 박수석 (이메일: <span class="warning">park_suk (at) company [dot] co [dot] kr</span>) (봇 회피)
+
+- 테스트 계정 정보
+- 카드(현대): <span class="warning">4123 45Б7 8901 2345</span> (오타/변형: 6 대신 키릴 문자 Б)
+- 카드(비씨): <span class="warning">9410-1234-S678-9012</span> (오타/변형: 5 대신 영문 S)
+- 계좌(농협): <span class="warning">302 1234 5678 01</span> (공백 구분)
+- 주민: <span class="warning">900101 - 1******</span> (일부 마스킹, 앞부분 유출)
+- 여권: <span class="warning">M 1234 5678</span> (공백 포함)
+
+- 참고:
+- GPS 좌표: 35.8714° N, 128.6014° E (오탐: 위경도)
+- 제품 SKU: 880101-1234567-001 (오탐: 주민번호와 유사한 상품 코드)
+- 송장번호: 123-456-7890 (오탐: 전화번호와 유사한 송장번호)
+```
+
+이 데이터셋들이 봇의 문맥 파악 능력과 난독화 대응 능력을 높이는 데 도움이 될 것입니다.
+
+혹시 특정 유형(예: 금융 정보, 주소 등)에 더 집중된 시나리오가 필요하신가요?
