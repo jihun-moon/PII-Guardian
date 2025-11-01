@@ -5,3 +5,5 @@ streamlit
 transformers
 torch
 selenium
+datasets
+pyarrow
