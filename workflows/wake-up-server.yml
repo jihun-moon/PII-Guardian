@@ -1,0 +1,25 @@
+# .github/workflows/wake-up-server.yml
+name: Wake Up NCP Server
+on:
+  schedule:
+    - cron: '10 15 * * *' # 🚨 한국 시간(KST) 기준 매일 00:10 (새벽)에 실행
+  workflow_dispatch:
+jobs:
+  wake-up:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Wake Up Request to NCP
+        run: |
+          ACCESS_KEY="${{ secrets.NCP_ACCESS_KEY }}"
+          SECRET_KEY="${{ secrets.NCP_SECRET_KEY }}"
+          
+          # 🚨 NCP 콘솔에서 복사한 '서버 인스턴스 번호'로 바꾸세요
+          INSTANCE_NO="112569519" 
+          
+          API_URL="https://ncloud.apigw.ntruss.com"
+          API_PATH="/vserver/v2/startServerInstances?serverInstanceNoList.1=$INSTANCE_NO&responseFormatType=json"
+          TIMESTAMP=$(date +%s)000
+          METHOD="GET"
+          SIG_MESSAGE="$METHOD $API_PATH\n$TIMESTAMP\n$ACCESS_KEY"
+          SIGNATURE=$(echo -n "$SIG_MESSAGE" | openssl dgst -sha256 -hmac "$SECRET_KEY" -binary | base64)
+          curl -s -X $METHOD -H "x-ncp-apigw-timestamp:$TIMESTAMP" -H "x-ncp-iam-access-key:$ACCESS_KEY" -H "x-ncp-apigw-signature-v2:$SIGNATURE" "$API_URL$API_PATH"

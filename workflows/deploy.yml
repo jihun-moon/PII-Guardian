@@ -1,0 +1,30 @@
+# .github/workflows/deploy.yml
+name: Deploy to NCP Server
+on:
+  push:
+    branches: [ main ]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Deploy to NCP VM via SSH
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.NCP_HOST }}
+        username: ${{ secrets.NCP_USERNAME }}
+        key: ${{ secrets.NCP_SSH_KEY }}
+        script: |
+          apt-get update
+          apt-get install python3-pip git -y
+          
+          # 🚨 'PII-Guardian'을 팀이 정한 폴더 이름으로 바꾸세요
+          cd /root
+          git clone https://github.com/${{ github.repository }}.git PII-Guardian || true
+          
+          # 🚨 여기도 위와 똑같이 바꾸세요
+          cd /root/PII-Guardian
+          git pull
+          
+          pip3 install -r requirements.txt
+          echo "✅ 배포 성공!"
