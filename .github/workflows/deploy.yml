@@ -30,23 +30,26 @@ jobs:
             # 0. 시스템 패키지 설치
             echo "Updating packages..."
             apt-get update
-            apt-get install -y python3-pip git python3-venv wget gnupg unzip
+            # (✨ 수정) curl, ca-certificates 추가
+            apt-get install -y python3-pip git python3-venv wget gnupg unzip curl ca-certificates
             
-            # (✨✨✨ 핵심 수정 v2.5 ✨✨✨)
+            # (✨✨✨ 핵심 수정 v2.6 - GPG 오류 수정 ✨✨✨)
             
             # (✨ 1. Google Chrome 설치 - Modern GPG Keyring 방식)
             echo "Installing Google Chrome (GPG Keyring)..."
-            # 1a. Google Chrome GPG 키 다운로드 및 저장
-            wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome-keyring.gpg
-            # 1b. Chrome apt 저장소 설정
-            echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome-keyring.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | tee /etc/apt/sources.list.d/google-chrome.list > /dev/null
+            # 1a. GPG 키 저장을 위한 디렉토리 생성
+            mkdir -p /etc/apt/keyrings
+            # 1b. Google Chrome GPG 키 다운로드, dearmor 후 저장 (curl 사용)
+            curl -fsSL https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /etc/apt/keyrings/google-chrome.gpg
+            # 1c. Chrome apt 저장소 설정 (signed-by 옵션 추가)
+            echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | tee /etc/apt/sources.list.d/google-chrome.list > /dev/null
             
             # (✨ 2. ChromeDriver 공식 저장소 추가 - Modern GPG Keyring 방식)
             echo "Installing ChromeDriver (GPG Keyring)..."
-            # 2a. ChromeDriver GPG 키 다운로드 및 저장
-            wget -q -O - https://edgedl.me/chrome-for-testing/linux/latest/KEY.gpg | gpg --dearmor -o /usr/share/keyrings/chrome-for-testing-keyring.gpg
-            # 2b. ChromeDriver apt 저장소 설정
-            echo "deb [arch=amd64 signed-by=/usr/share/keyrings/chrome-for-testing-keyring.gpg] https://edgedl.me/chrome-for-testing/deb/ stable main" | tee /etc/apt/sources.list.d/chrome-for-testing.list > /dev/null
+            # 2a. ChromeDriver GPG 키 다운로드, dearmor 후 저장 (curl 사용)
+            curl -fsSL https://edgedl.me/chrome-for-testing/linux/latest/KEY.gpg | gpg --dearmor -o /etc/apt/keyrings/chrome-for-testing.gpg
+            # 2b. ChromeDriver apt 저장소 설정 (signed-by 옵션 추가)
+            echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/chrome-for-testing.gpg] https://edgedl.me/chrome-for-testing/deb/ stable main" | tee /etc/apt/sources.list.d/chrome-for-testing.list > /dev/null
             
             # (✨ 3. apt-get update를 모든 저장소 추가 *후*에 실행)
             echo "Updating apt lists..."
