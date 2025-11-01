@@ -37,6 +37,12 @@ def run_script(script_path):
     python_executable = os.path.join(BASE_PATH, "venv/bin/python3")
     log_file = script_path.replace('.py', '.log') # 예: crawler.py -> crawler.log
     
+    # (중요) venv 파이썬이 존재하는지 확인
+    if not os.path.exists(python_executable):
+        st.error(f"❌ 실행 실패: 가상 환경({python_executable})을 찾을 수 없습니다.")
+        st.error("deploy.yml이 venv를 생성했는지 확인하세요.")
+        return
+
     try:
         # (nohup과 &를 사용해 대시보드가 꺼져도 봇이 계속 돌게 함)
         # (로그 파일에 표준 출력(>>)과 표준 에러(2>&1)를 모두 저장)
@@ -136,3 +142,4 @@ with tab3:
         st.subheader(log_name)
         log_content = read_log_file(log_path)
         st.text_area(f"Log: {log_path}", log_content, height=300, key=log_path)
+
