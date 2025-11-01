@@ -113,7 +113,7 @@ def generate_random_test_data(num_lines=150):
         
         line = ""
         if context_choice == 'html_comment':
-            line = f""
+            line = f''
         elif context_choice == 'p_tag':
             line = f'<p class="{pii_class}">문의 내용: {pii_data}</p>'
         elif context_choice == 'div_data':
