@@ -6,41 +6,43 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      # 1. (신규) SSH 키를 임시 파일로 저장 (줄바꿈 \n 문제 자동 해결)
+      # 1. SSH 키를 임시 파일로 저장
       - name: Write SSH private key to disk
         run: |
           printf '%b\n' "${{ secrets.NCP_SSH_KEY }}" > /tmp/ncp_key
           chmod 600 /tmp/ncp_key
 
-      # 2. (수정) appleboy/ssh-action 대신 기본 ssh 명령어로 배포
-      - name: Deploy to NCP VM via ssh
+      # 2. 'ubuntu' 사용자로 접속하여 배포
+      - name: Deploy to NCP VM via ssh (as ubuntu)
         env:
           NCP_HOST: ${{ secrets.NCP_HOST }}
+          # (중요) 이 시크릿은 'ubuntu'여야 합니다.
           NCP_USERNAME: ${{ secrets.NCP_USERNAME }}
-          # GITHUB_REPOSITORY 변수는 GitHub Actions가 자동으로 제공합니다.
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
-          # ssh로 접속한 뒤, 원격 서버에서 실행할 스크립트를 'EOF'까지 전달합니다.
-          # GITHUB_REPOSITORY 변수도 원격 서버로 넘겨줍니다.
           ssh -i /tmp/ncp_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${NCP_USERNAME}@${NCP_HOST} \
             "GITHUB_REPOSITORY=${GITHUB_REPOSITORY} bash -s" <<'EOF'
             
             # (중요) 스크립트 실행 중 하나라도 실패하면 즉시 중단합니다.
             set -e
 
-            # 0. (권장) 이 패키지들은 한 번만 설치하면 되므로, 
-            # 서버에 미리 설치해두고 이 라인들은 지우는 것이 배포 속도에 좋습니다.
-            apt-get update
-            apt-get install python3-pip git -y
+            echo "Connecting as: $(whoami)"
+
+            # 0. 시스템 패키지 설치 (관리자 권한 'sudo' 필요)
+            # apt-get은 'sudo' 없이 실행할 수 없습니다.
+            # -y 플래그를 추가하여 'Y/n' 질문에 자동으로 'Y'를 누르도록 합니다.
+            echo "Updating packages with sudo..."
+            sudo apt-get update
+            sudo apt-get install -y python3-pip git
             
-            # 1. 배포할 폴더 경로를 변수로 지정 (🚨 PII-Guardian을 실제 폴더명으로 변경)
-            # (권장) /root 보다는 /var/www/PII-Guardian 같은 경로를 추천합니다.
-            export DEPLOY_DIR="/root/PII-Guardian"
+            # 1. 배포할 폴더 경로를 'ubuntu' 사용자의 홈 디렉토리로 변경
+            export DEPLOY_DIR="/home/ubuntu/PII-Guardian"
             
             # 2. 레포지토리 클론 또는 풀
             if [ ! -d "$DEPLOY_DIR" ]; then
               echo "Cloning repository..."
-              cd /root # 상위 디렉토리로 이동
-              # 원격 서버에서 GITHUB_REPOSITORY 변수를 사용합니다.
+              # 상위 디렉토리도 /home/ubuntu 로 변경
+              cd /home/ubuntu
               git clone https://github.com/${GITHUB_REPOSITORY}.git $DEPLOY_DIR
             else
               echo "Pulling latest code..."
@@ -48,18 +50,14 @@ jobs:
               git pull
             fi
             
-            # 3. 의존성 설치
+            # 3. 의존성 설치 (이건 'ubuntu' 사용자의 권한으로 설치)
             cd $DEPLOY_DIR
             pip3 install -r requirements.txt
             
-            # 4. (🚨🚨 매우 중요) 애플리케이션 재시작
-            # 'pii-guardian.service'는 실제 서비스 파일 이름으로 변경하세요.
-            echo "Restarting application service..."
-
-            # (개선) '|| true'를 추가했습니다. 
-            # 만약 서비스가 처음 배포되어 아직 실행 중이 아니거나,
-            # 이름이 틀려서 재시작에 실패해도 배포 전체가 '실패'로 뜨지 않게 합니다.
-            systemctl restart pii-guardian.service || true
+            # 4. 애플리케이션 재시작 (관리자 권한 'sudo' 필요)
+            # systemctl은 'sudo' 없이 실행할 수 없습니다.
+            echo "Restarting application service with sudo..."
+            sudo systemctl restart pii-guardian.service || true
             
             echo "✅ 배포 성공!"
           EOF
