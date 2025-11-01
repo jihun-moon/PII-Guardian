@@ -3,93 +3,119 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>메가 시나리오 테스트 (v3.2)</title>
+    <meta name="author" content="김개발, 010-3333-4444, dev.kim@internal-server.com">
+    <title>메가 시나리오 테스트 (v4.0 Final Challenge)</title>
     <style>
+        /* 2. CSS 주석 내 유출 (매우 흔한 실수) */
+        /* - 임시 담당자: 박지원 (010-9999-8888)
+           - 백업 이메일: jiwon.park.bak@gmail.com
+           - 테스트용 카드(마스터): 5123-4567-8901-2345
+        */
         body { font-family: sans-serif; line-height: 1.6; padding: 20px; max-width: 900px; margin: auto; background: #f4f4f4; }
         h1, h2, h3 { color: #333; border-bottom: 2px solid #ccc; padding-bottom: 5px;}
         .content { background: #fff; border: 1px solid #ddd; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
         .comment-section { background: #fdfdfd; border: 1px solid #eee; padding: 10px; margin-top: 10px; }
         .footer { text-align: center; color: #777; margin-top: 30px; }
-        .code { background: #2d2d2d; color: #c0c0c0; padding: 15px; border-radius: 5px; overflow-x: auto; }
+        .code { background: #2d2d2d; color: #c0c0c0; padding: 15px; border-radius: 5px; overflow-x: auto; font-family: 'Courier New', Courier, monospace; }
         .warning { color: red; font-weight: bold; }
     </style>
 </head>
 <body>
-    <h1>메가 시나리오 테스트 (v3.2)</h1>
-    <p>강화된 Regex 봇(v3.2)과 Prompt가 적용된 LLM 봇을 종합적으로 테스트합니다.</p>
+    <h1>메가 시나리오 테스트 (v4.0 Final Challenge)</h1>
+
+    <div id="user-profile-widget"
+         data-user-contact="010-7777-1234"
+         data-user-email="hidden.user@naver.com"
+         data-user-info-json='{"name":"이수진", "address":"서울시 강남구 테헤란로 123", "ssn_last_7":"2345678"}'
+         data-order-id="ORD-20251101-0001"> <p>사용자 정보 위젯 (속성에 데이터 숨김)</p>
+    </div>
+    
+    <input type="hidden" id="session_user_rrn" value="880101-1234567">
+    <input type="hidden" id="session_user_phone" value="010-8801-1234">
 
     <div class="content">
         <h2>(시나리오 2) 공식적인 '공개' 정보 (오탐 방지)</h2>
         <p>LLM이 문맥을 보고 '공개(Public)'로 판단해야 합니다.</p>
         <ul>
-            <li>(주)PII-Guardian 고객센터: (02) 1588-0000 (괄호 + 일반전화)</li>
-            <li>대표 팩스: 02 1234 5678 (공백 구분)</li>
-            <li>기술 지원 이메일: support@pii-guardian.com</li>
-            <li>회사 주소: 대구광역시 중구 달구벌대로 2095 (DGB대구은행 본점 주소 예시)</li>
-            <li>사업자등록번호: 123-45-67890 (LLM이 '공개'로 판단해야 함)</li>
+            <li>(주)PII-Guardian 고객센터: 1588-0000 (대표번호)</li>
+            <li>IR(투자) 문의: 02-123-4567 (공개된 유선)</li>
+            <li>채용 문의: recruit@pii-guardian.com (공개 이메일)</li>
+            <li>특허 출원 번호: 10-2024-0123456 (형태가 비슷하지만 PII 아님)</li>
+            <li>본사 주소: (41911) 대구광역시 중구 달구벌대로 2095 (공개 주소)</li>
+            <li>사업자등록번호: 123-45-67890 (공개 정보)</li>
+            <li>ISO 인증번호: KOR-9001-12345 (오탐)</li>
         </ul>
     </div>
 
     <div class="content">
-        <h2>(시나리오 3) Q&A 게시판 (다양한 변형 '유출')</h2>
+        <h2>(시나리오 3) Q&A 게시판 (새로운 PII 유형)</h2>
         <p>사용자들이 실수로 남긴 다양한 형태의 PII입니다. '유출(Leak)'로 판단되어야 합니다.</p>
         
         <div class="comment-section">
-            <p><strong>작성자: 박영희</strong></p>
-            <p>IM뱅크 연동 오류... 제 <span class="warning">전번(줄임말)</span> 남깁니다. <strong>01011112222</strong> (하이픈 없음) 연락주세요. 
-               제 <span class="warning">주민(줄임말)</span> 앞자리는 <strong>901231</strong> 입니다. (뒷자리는 1234567)</p>
+            <p><strong>작성자: 최민준</strong></p>
+            <p>배송이 안 오네요. 제 <span class="warning">상세 주소</span>는 '대구광역시 수성구 OO로 12길 34, OO아파트 101동 202호' 입니다. 
+               제 <span class="warning">운전면허</span> 번호는 <span class="warning">13-00-123456-78 (서울)</span> 입니다. 확인 바랍니다.</p>
         </div>
         <div class="comment-section">
-            <p><strong>작성자: 이순신</strong></p>
-            <p>개인 <span class="warning">멜(줄임말)</span> <strong>sunsin_lee@naver.com</strong>으로 공유 부탁드립니다.
-               제 카드(비자) <strong>4500 1234 5678 9012</strong> (공백 구분) 결제가 안됩니다.</p>
+            <p><strong>작성자: Mr. Smith (외국인)</strong></p>
+            <p>I cannot verify my account. My passport no. is <span class="warning">M98765432</span>. 
+               Also, my Alien Registration Number (외국인등록번호) is <span class="warning">950101-5123456</span>.</p>
         </div>
         <div class="comment-section">
-            <p><strong>작성자: new_user</strong></p>
-            <p>가입이 안 돼요. 본인 인증 오류... 
-               - 이름: 김대한
-               - 주민번호: <strong>9012311234567</strong> (하이픈 없음)
-               - 여권번호: <strong>M12345678</strong></p>
+            <p><strong>작성자: 쪼개기_신공</strong></p>
+            <p>제 폰번호 앞자리는 <span class="warning">010</span> 이고요...</p>
         </div>
-        <div class="comment-section">
-            <p><strong>작성자: customer_service (직원 실수)</strong></p>
-            <p>고객님, <span class="warning">계좌(줄임말)</span> <strong>112501234567 (DGB)</strong> (하이픈 없음)에서 출금 시... (중략)</p>
+        <div class="comment-section" style="margin-top: 5px;">
+            <p><strong>작성자: 쪼개기_신공 (답글)</strong></p>
+            <p>아, 빠뜨렸네요. 뒷자리는 <span class="warning">1234의 5678</span> 입니다. (정보 쪼개기)</p>
         </div>
     </div>
 
     <div class="content">
-        <h2>(시나리오 4) 개발자 로그 및 코드 (오탐 + 유출)</h2>
+        <h2>(시나리오 4) 개발자 로그 및 코드 (고급 오탐 + 유출)</h2>
         <p>LLM이 '유출'과 '오탐'을 정확히 구분해야 합니다.</p>
         <div class="code">
-            <pre>
+<pre>
 [INFO] DB Connection Test...
 [INFO] Connecting to 10.0.0.5 (Internal DB) ... [유출]
 [INFO] User 'admin' login success from 192.168.1.100 ... [유출]
-[CONFIG] API_KEY = "pk-asdfqwerzxcv1234567890asdf" ... [유출]
-[ERROR] Transaction failed for card 4500-0000-0000-0000 (Test Card) ... [공개/샘플]
+
+[DEBUG] User Auth Token (Base64): <span class="warning">eyJ1c2VyIjoi7JWI7JaR7IucIiwicGhvbmUiOiIwMTAtMTIzNC01Njc4In0=</span>
+[INFO] Request URL: /api/v1/getUser?email=<span class="warning">user@example.com</span>&phone=<span class="warning">01044445555</span>
+
+[ERROR] Transaction failed for card 4100-0000-0000-0000 (Test Card) ... [공개/샘플]
 [DEBUG] Sample RRN: 990101-1000000 ... [공개/샘플]
-[DEBUG] Running test for user_id 112113114 ... (단순 숫자, 오탐) [공개]
-[DEBUG] Batch process 115 116 177 completed. (단순 숫자, 오탐) [공개]
-[INFO] Jenkins Build #123456789 success. (단순 숫자, 오탐) [공개]
-            </pre>
+[INFO] Order Processing: ORD-880101-1234567 (주문번호, 주민번호와 패턴 동일) ... [공개]
+[INFO] Git Commit Hash: 901231f1a2b3c4d5e6 (해시, 주민번호 앞자리와 유사) ... [공개]
+[DEBUG] User ID: 950101 (단순 ID, 외국인등록번호 앞자리와 유사) ... [공개]
+[INFO] Jenkins Build #123456789 success. (단순 숫자) ... [공개]
+
+[CONFIG] Loading SSH Key...
+<span class="warning">-----BEGIN RSA PRIVATE KEY-----
+MIIEowIBAAKCAQEA... (중략) ...
+-----END RSA PRIVATE KEY-----</span>
+</pre>
         </div>
     </div>
     
     <div class="content">
-        <h2>(시나리오 5) 난독화(Obfuscation) 및 줄임말 테스트</h2>
-        <p>탐지 봇을 피하기 위한 패턴입니다. '유출'로 판단되어야 합니다.</p>
+        <h2>(시나리오 5) 교묘한 난독화(Obfuscation)</h2>
+        <p>탐지 봇을 피하기 위한 고급 패턴입니다. '유출'로 판단되어야 합니다.</p>
         <ul>
-            <li>제 <span class="warning">전번</span>은 <span class="warning">영일영-둘둘둘둘-삼삼삼삼</span> 입니다. (한글)</li>
-            <li>급해서 <span class="warning">계번</span> 남깁니다: <span class="warning">농협 302.1234.5678.01</span> (점으로 구분)</li>
-            <li>이메일: <span class="warning">my_email (at) gmail.com</span> (봇 회피용)</li>
-            <li>카드: <span class="warning">4500.1234.5678.9012</span> (점으로 구분)</li>
+            <li>제 <span class="warning">전번</span>은 <span class="warning">영일영.팔팔팔팔.구구구구</span> 입니다. (한글+점)</li>
+            <li>급해서 <span class="warning">계번</span> 남깁니다: <span class="warning">우리 1002-123-456789</span> (하이픈)</li>
+            <li>이메일: <span class="warning">my_email (at) gmail [dot] com</span> (봇 회피용)</li>
+            <li>카드: <span class="warning">450O-1234-5678-9O12</span> (숫자 0 대신 영문 O 사용)</li>
+            <img src="fake_qr.png" 
+                 alt="제 개인 QR코드입니다. 연락처: 010-3456-7890" 
+                 style="display:none;">
+            <button onclick="alert('임시 비밀번호: myPassword123!\n담당자: 010-0000-0000');">클릭(주의)</button>
         </ul>
     </div>
 
     <div class="footer">
-        (주) PII-Guardian | 대표: 홍길동 | 사업자등록번호: 1234567890 (하이픈 없음)<br>
-        (AI-NER가 '홍길동'을 탐지하되, LLM이 '대표'라는 문맥을 보고 '공개'로 판단해야 함)
+        (주) PII-Guardian | 대표: 홍길동 | 사업자등록번호: 123-45-67890 (하이픈)<br>
+        (LLM이 '홍길동'을 보고 '대표'라는 문맥을 파악하여 '공개'로 판단해야 함 - 이름 탐지기능 추가 시 중요)
     </div>
-
 </body>
 </html>
