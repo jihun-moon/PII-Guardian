@@ -1,5 +1,5 @@
 # 🎓 (봇 3) '학습기' 봇. '자동' 정답으로 '신입' 봇 뇌 훈련 -> my-ner-model
-# (v2.2 - 실제 Fine-Tuning + 패딩 오류 수정)
+# (v2.4 - 체크포인트 2개 저장)
 # ----------------------------------------------------
 # 1. '정답' 목록 (feedback_data.csv) [In_2]를 읽습니다.
 # 2. 'trained.log' (학습 기록)을 읽습니다.
@@ -19,15 +19,14 @@ from transformers import ( # (✨ 신규)
     AutoModelForTokenClassification,
     TrainingArguments,
     Trainer,
-    DataCollatorForTokenClassification # (✨✨✨ 1. [핵심] 데이터 패딩을 위한 Collator 임포트 ✨✨✨)
+    DataCollatorForTokenClassification # (✨ 패딩 오류 수정)
 )
 
 # --- 1. 설정값 ---
 BASE_PATH = "/root/PII-Guardian" 
 LOG_FILE = os.path.join(BASE_PATH, 'train.log')
 
-# (✨✨✨ 핵심 수정: 로그 중복 제거 ✨✨✨)
-# FileHandler를 제거하고 StreamHandler만 남깁니다.
+# (✨ 로그 중복 제거)
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s',
                     handlers=[logging.StreamHandler()])
@@ -38,9 +37,6 @@ TRAINED_LOG_FILE = os.path.join(BASE_PATH, 'trained.log')
 BASE_MODEL = 'klue/roberta-base' # 🧠 '신입' 뇌 (기본 모델)
 
 # (✨ 신규) NER 태그 정의 (IOB2 형식)
-# O = Outside (PII 아님)
-# B-PII = Beginning (PII 시작)
-# I-PII = Inside (PII 중간/끝)
 label_list = ['O', 'B-PII', 'I-PII']
 label2id = {label: i for i, label in enumerate(label_list)}
 id2label = {i: label for i, label in enumerate(label_list)}
@@ -184,8 +180,7 @@ def main():
 
     # 5. (✨ 신규) 실제 학습(Fine-Tuning) 시작
     
-    # (✨✨✨ 2. [핵심] 데이터 Collator 생성 ✨✨✨)
-    # 토크나이저를 사용해, 배치의 길이를 자동으로 맞춰주는(padding) Collator를 만듭니다.
+    # (✨ 패딩 오류 수정)
     data_collator = DataCollatorForTokenClassification(tokenizer=tokenizer)
     
     # (NCP 서버 사양에 맞춰 최소한의 설정으로 학습)
@@ -195,14 +190,18 @@ def main():
         per_device_train_batch_size=2,  # 한 번에 2개씩 (CPU/저사양 GPU용)
         save_strategy="epoch",          # 1 에포크마다 저장
         logging_steps=10,               # 10 스텝마다 로그 출력
-        report_to="none"                # (필수) wandb 같은 외부 로깅 비활성화
+        report_to="none",               # (필수) wandb 같은 외부 로깅 비활성화
+        
+        # (✨✨✨ 핵심 수정: 용량 관리 ✨✨✨)
+        # 가장 최근의 체크포인트 2개만 남기고 나머지는 자동으로 삭제합니다.
+        save_total_limit=2
     )
 
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
-        data_collator=data_collator # (✨✨✨ 3. [핵심] Collator를 Trainer에 등록 ✨✨✨)
+        data_collator=data_collator # (✨ 패딩 오류 수정)
     )
 
     logging.info("🔥 '경력직' 뇌 실제 학습 시작... (CPU/GPU 사용)")
