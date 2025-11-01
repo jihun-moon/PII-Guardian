@@ -1,5 +1,5 @@
 # 🕵️ (봇 1) '신입' 봇. '의심' 내역 수집 -> detected_leaks.csv
-# (v2.11 - 오타 수정 및 Selenium 경로 수정)
+# (v2.12 - 0건 탐지 시 로그 추가)
 
 import requests
 from bs4 import BeautifulSoup
@@ -38,7 +38,9 @@ REGEX_PATTERNS = {
 
 # --- 탐지할 URL (이제 dcinside.com도 가능) ---
 CRAWL_URLS = [
-    "https://www.dcinside.com/"]
+    "https://www.dcinside.com/", # (동적 사이트)
+    "https://comsoft.daegu.ac.kr/comsoft/professor.do", # (정적 사이트)
+]
 
 # (✨ 신규) Selenium 드라이버 설정
 def setup_selenium_driver():
@@ -247,7 +249,7 @@ if __name__ == "__main__":
     # --- Selenium을 사용한 실제 웹사이트 크롤링 ---
     logging.info(f"🛰️ [Selenium 크롤링] {len(CRAWL_URLS)}개의 URL을 스캔합니다. (OCR 비활성화)")
     for url in CRAWL_URLS:
-        leaks = crawl_web_page(url, ner_brain, driver) 
+        leaks = crawl_web_page(url, ner_pipeline, driver) 
         for leak in leaks:
             leak['url'] = url 
             leak['repo'] = 'web-crawl' 
@@ -259,9 +261,14 @@ if __name__ == "__main__":
 
     # (깃허브 API 검색은 여전히 주석 처리)
             
-    # 최종 결과 저장
+    # (✨✨✨ 핵심 수정 v2.12 ✨✨✨)
+    # 최종 결과 저장 (로그 추가)
     if total_leaks_found:
-        save_to_csv(all_leaks)
+        logging.info(f"✅ 총 {len(total_leaks_found)}개의 PII를 탐지했습니다. CSV 저장을 시작합니다.")
+        save_to_csv(total_leaks_found)
+    else:
+        # (이 로그가 없어서 사용자가 헷갈렸음)
+        logging.info("✅ PII 탐지 결과: 0건. CSV 파일을 생성하지 않습니다.") 
     
     logging.info("🤖 1. '신입' 봇(Crawler) 작동 완료.")
 
