@@ -12,9 +12,11 @@ import os
 import time
 import datetime
 
-FEEDBACK_FILE = 'feedback_data.csv' # (In_2) 학습할 '받은 편지함'
-MODEL_PATH = 'my-ner-model'         # (출력) 학습된 뇌 저장소
-TRAINED_LOG_FILE = 'trained.log'    # (기록) 이미 학습한 '정답' ID 목록
+# (✨ 경로 수정) BASE_PATH 기준으로 경로 재설정
+BASE_PATH = "/root/PII-Guardian" 
+FEEDBACK_FILE = os.path.join(BASE_PATH, 'feedback_data.csv')
+MODEL_PATH = os.path.join(BASE_PATH, 'my-ner-model')
+TRAINED_LOG_FILE = os.path.join(BASE_PATH, 'trained.log')
 LAST_TRAINED_FILE = os.path.join(MODEL_PATH, 'last_trained.txt') # 학습 완료 시간
 
 def load_trained_log():
