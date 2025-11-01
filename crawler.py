@@ -1,5 +1,5 @@
 # 🕵️ (봇 1) '신입' 봇. '의심' 내역 수집 -> detected_leaks.csv
-# (v2.13 - NameError 수정)
+# (v2.17 - Selenium + 금융/민감 PII 패턴 확장)
 
 import requests
 from bs4 import BeautifulSoup
@@ -16,7 +16,7 @@ from selenium.webdriver.chrome.service import Service # (✨ 신규)
 
 # 우리 헬퍼 및 설정 파일 임포트
 import config
-import ocr_helper # (✨ 수정) 'oclear_helper' -> 'ocr_helper' (오타 수정)
+import ocr_helper # (OCR은 여전히 비활성화)
 
 # --- 1. 설정값 ---
 BASE_PATH = "/root/PII-Guardian"
@@ -31,15 +31,28 @@ FEEDBACK_FILE = os.path.join(BASE_PATH, 'feedback_data.csv')
 MODEL_PATH = os.path.join(BASE_PATH, 'my-ner-model')
 BASE_MODEL = 'klue/roberta-base' 
 
+# (✨✨✨ 핵심 수정 1: 정규식 패턴 대폭 확장 ✨✨✨)
 REGEX_PATTERNS = {
+    # 기존
     'EMAIL': r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
     'PHONE': r'\b010[-.\s]?\d{4}[-.\s]?\d{4}\b',
+    
+    # 신규 (금융/민감정보)
+    'RRN': r'\b\d{6}[- ]?[1-4]\d{6}\b', # 주민등록번호
+    'CREDIT_CARD': r'\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b', # 카드번호
+    'ACCOUNT_NUM': r'\b\d{3}[- ]?\d{2,6}[- ]?\d{2,7}\b', # 계좌번호 (DGB 112-50-1234567 포함)
+    'API_KEY': r'\b(sk|pk|im-key-prod)-[a-zA-Z0-9_,-]{20,}\b', # API 키 (IM 뱅크 키 포함)
+    'INTERNAL_IP': r'\b(192\.168\.\d{1,3}\.\d{1,3})\b|\b(10\.\d{1,3}\.\d{1,3}\.\d{1,3})\b', # 내부 IP
+    'PHONE_GENERAL': r'\b0[2-9][0-9]?[-.\s]?\d{3,4}[-.\s]?\d{4}\b' # (1588 등) 일반 전화
 }
 
-# --- 탐지할 URL ---
+# (✨✨✨ 핵심 수정 2: 탐지할 URL 변경 ✨✨✨)
 CRAWL_URLS = [
-    "https://github.com/jihun-moon/PII-Guardian/blob/main/test_site/index.html",
-    "https://github.com/jihun-moon/PII-Guardian/blob/main/test_site/page_with_image.html",
+    # (신규) 1단계에서 GitHub에 Push한 텍스트 종합 테스트 파일
+    "https://github.com/jihun-moon/PII-Guardian/blob/main/test_site/test_site_comprehensive.html",
+    
+    # (신규) 1단계에서 GitHub에 Push한 이미지 종합 테스트 파일 (텍스트만 읽기)
+    "https://github.com/jihun-moon/PII-Guardian/blob/main/test_site/test_site_images.html",
 ]
 
 # (✨ 신규) Selenium 드라이버 설정
@@ -102,8 +115,6 @@ def load_ner_pipeline():
         model = AutoModelForTokenClassification.from_pretrained(MODEL_PATH, token=hf_token)
         logging.info(f"✅ '경력직' AI 뇌({MODEL_PATH}) 로드 성공!")
     except Exception as e: 
-        # (참고) 이 경고는 'train.py'가 아직 시뮬레이션이라 'my-ner-model' 폴더가 비어있거나 
-        # 잘못된 모델이 들어있어 발생하는 정상적인 경고입니다.
         logging.warning(f"⚠️ '경력직' AI 뇌({MODEL_PATH}) 로드 실패. 원인: {e}")
         logging.info(f"➡️ '신입' 뇌({BASE_MODEL})를 로드합니다.")
         try:
@@ -119,29 +130,38 @@ def load_ner_pipeline():
 # --- 3. 유출 탐지 함수 (텍스트용) ---
 def find_leaks_in_text(text, ner_pipeline):
     """주어진 텍스트에서 RegEx와 NER로 PII를 찾습니다."""
-    # (내용 동일 - 생략)
     leaks = []
     if not text: 
         return leaks
         
     context_preview = text.strip().replace('\n', ' ').replace('\r', ' ')[0:300]
     
+    # (✨ 수정) 모든 패턴(금융정보 포함)을 탐지
     for pii_type, pattern in REGEX_PATTERNS.items():
         for match in re.finditer(pattern, text):
-            leaks.append({
-                'type': pii_type,
-                'content': match.group(0),
-                'context': context_preview
-            })
+            is_duplicate = False
+            for existing_leak in leaks:
+                if existing_leak['content'] == match.group(0):
+                    is_duplicate = True
+                    break
+            
+            if not is_duplicate:
+                leaks.append({
+                    'type': pii_type.replace('_GENERAL', ''), # (PHONE_GENERAL -> PHONE)
+                    'content': match.group(0),
+                    'context': context_preview
+                })
             
     try:
         ner_results = ner_pipeline(text[:512]) 
         for entity in ner_results:
-            if entity['entity_group'] in ['PS', 'LC', 'OG']:
+            # (✨ 수정) '경력직' 뇌가 학습할 'PII' 태그 추가
+            if entity['entity_group'] in ['PS', 'LC', 'OG', 'PII']: 
                 leak_type = entity['entity_group']
                 if leak_type == 'PS': leak_type = 'PERSON (AI)'
                 if leak_type == 'LC': leak_type = 'LOCATION (AI)'
                 if leak_type == 'OG': leak_type = 'ORGANIZATION (AI)'
+                if leak_type == 'PII': leak_type = 'PII (Custom AI)' # (경력직 뇌가 탐지)
                 
                 leaks.append({
                     'type': leak_type,
@@ -153,10 +173,9 @@ def find_leaks_in_text(text, ner_pipeline):
             
     return leaks
 
-# --- 4. (✨ 핵심 수정) Selenium 크롤링 함수 (OCR 비활성화) ---
+# --- 4. Selenium 크롤링 함수 (OCR 비활성화) ---
 def crawl_web_page(page_url, ner_pipeline, driver):
     """(기능 1) Selenium으로 동적 웹페이지를 크롤링합니다. (OCR은 비활성화)"""
-    # (내용 동일 - 생략)
     logging.info(f"🕵️ [Selenium 크롤링] 시작: {page_url}")
     leaks_found = []
     
@@ -167,6 +186,9 @@ def crawl_web_page(page_url, ner_pipeline, driver):
         html_content = driver.page_source
         soup = BeautifulSoup(html_content, 'html.parser')
         
+        # (✨ 수정) GitHub 페이지는 'body' 대신 'article' 태그에 본문이 있음
+        # (혹은 'body'로 해도 무방하나, 'Skip to content...' 등 불필요한 텍스트가 포함됨)
+        # 우선은 범용성을 위해 'body'를 유지합니다.
         if not soup.body: 
             return []
             
@@ -254,8 +276,9 @@ if __name__ == "__main__":
         leaks = crawl_web_page(url, ner_brain, driver) 
         for leak in leaks:
             leak['url'] = url 
-            leak['repo'] = 'web-crawl' 
+            leak['repo'] = 'web-crawl' # (repo를 'web-crawl'로 고정)
         total_leaks_found.extend(leaks)
+        time.sleep(1) # (사이트 부하 방지)
 
     # (✨ 신규) 드라이버 종료
     driver.quit()
@@ -273,4 +296,3 @@ if __name__ == "__main__":
         logging.info("✅ PII 탐지 결과: 0건. CSV 파일을 생성하지 않습니다.") 
     
     logging.info("🤖 1. '신입' 봇(Crawler) 작동 완료.")
-
