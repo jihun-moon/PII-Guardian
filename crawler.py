@@ -34,7 +34,6 @@ REGEX_PATTERNS = {
 }
 
 # (크롤링할 대상)
-# 🚨 (수정) 사용자 이름을 'jihun0948'에서 'jihun-moon'으로 바로잡았습니다.
 TEST_URLS = [
     'https://jihun-moon.github.io/PII-Guardian/test_site/index.html',
     'https://jihun-moon.github.io/PII-Guardian/test_site/page_with_image.html'
@@ -46,13 +45,13 @@ GITHUB_QUERIES = [
     '"IM뱅크" "비밀번호"',
 ]
 
-# --- 2. 봇의 '뇌' (AI 모델) 로드 (✨ 최종 수정) ---
+# --- 2. 봇의 '뇌' (AI 모델) 로드 (✨ Blocker 1 해결) ---
 def load_ner_pipeline():
     """봇의 '뇌'(NER 모델)를 로드합니다."""
     
     # (✨ 핵심 수정)
-    # Crontab 환경 문제를 회피하기 위해, deploy.yml이 생성한
-    # 토큰 '파일'을 직접 읽어서 사용합니다.
+    # Crontab/대시보드 환경 문제를 모두 해결하기 위해,
+    # deploy.yml이 생성한 토큰 '파일'을 직접 읽어서 사용합니다.
     token_file_path = "/root/.cache/huggingface/token"
     hf_token = None
     if os.path.exists(token_file_path):
@@ -73,9 +72,15 @@ def load_ner_pipeline():
         hf_token = getattr(config, 'HF_TOKEN', None)
         if hf_token:
              print("✅ config.py에서 HF_TOKEN을 로드했습니다.")
+    
+    if not hf_token:
+        print("❌ [치명적 오류] Hugging Face 토큰을 찾을 수 없어 모델을 로드할 수 없습니다.")
+        # 인증 토큰이 없으면 어차피 실패하므로, 여기서 강력하게 None을 반환합니다.
+        return None 
 
     try:
         # 1순위: 우리가 학습시킨 '경력직' 뇌(my-ner-model)를 로드
+        # (✨ 핵심 2) '경력직' 뇌가 로컬이 아닌 Private Hub에 있을 경우를 대비해 토큰 전달
         tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH, token=hf_token)
         model = AutoModelForTokenClassification.from_pretrained(MODEL_PATH, token=hf_token)
         print(f"✅ '경력직' AI 뇌({MODEL_PATH}) 로드 성공!")
@@ -93,7 +98,6 @@ def load_ner_pipeline():
 
 # --- 3. 유출 탐지 함수 (텍스트용) ---
 def find_leaks_in_text(text, ner_pipeline):
-# ... (이하 코드는 이전과 동일) ...
     """주어진 텍스트에서 RegEx와 NER로 PII를 찾습니다."""
     leaks = []
     
@@ -278,13 +282,19 @@ if __name__ == "__main__":
     
     print("🧠 봇의 AI 뇌(NER 모델)를 로드하는 중...")
     ner_brain = load_ner_pipeline()
+    
+    # (✨ 핵심) 뇌 로드(인증)에 실패하면 봇 작동 중지
+    if ner_brain is None:
+        print("❌ AI 뇌 로드에 실패하여 '신입' 봇을 종료합니다.")
+        exit() # 스크립트 종료
+        
     print("🧠 AI 뇌 로드 완료.")
     
     total_leaks_found = []
     
     # (필수) 테스트 사이트 크롤링
     for url in TEST_URLS:
-        leaks = crawl_test_site(url, ner_pipeline)
+        leaks = crawl_test_site(url, ner_brain)
         for leak in leaks:
             leak['url'] = url 
             leak['repo'] = 'test-site'
