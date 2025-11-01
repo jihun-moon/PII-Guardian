@@ -16,9 +16,12 @@ import logging # (✨ 수정) logging 모듈 임포트
 # (✨ 수정) 로깅 설정 (대시보드에서 볼 수 있도록 파일에도 저장)
 BASE_PATH = "/root/PII-Guardian" 
 LOG_FILE = os.path.join(BASE_PATH, 'autolabeler.log')
+
+# (✨✨✨ 핵심 수정: 로그 중복 제거 ✨✨✨)
+# FileHandler를 제거하고 StreamHandler만 남깁니다.
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s',
-                    handlers=[logging.FileHandler(LOG_FILE), logging.StreamHandler()])
+                    handlers=[logging.StreamHandler()])
 
 # (✨ 경로 수정) BASE_PATH 기준으로 경로 재설정
 DETECTED_FILE = os.path.join(BASE_PATH, 'detected_leaks.csv')
@@ -58,6 +61,7 @@ def main():
         logging.info(f"🧠 LLM(HyperCLOVA)에게 판단 요청: {row['content']}")
         
         try:
+            # (✨ 수정) llm_helper도 수정되어야 함 (print -> logging)
             result = llm_helper.get_llm_judgment(row['context'], row['content'])
             
             feedback = row.to_dict()
