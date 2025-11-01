@@ -1,0 +1,238 @@
+# 🕵️ (봇 1) '신입' 봇. '의심' 내역 수집 -> detected_leaks.csv
+# ----------------------------------------------------
+# 1. 텍스트/이미지(OCR)에서 '의심' PII를 1차 수집합니다.
+# 2. (선택) GitHub API에서 '의심' PII를 1차 수집합니다.
+# ----------------------------------------------------
+
+import requests
+from bs4 import BeautifulSoup
+import re
+import pandas as pd
+import os
+import time
+from transformers import pipeline, AutoTokenizer, AutoModelForTokenClassification
+from urllib.parse import urljoin
+
+# 우리 헬퍼 및 설정 파일 임포트
+import config
+import ocr_helper 
+
+# --- 1. 설정값 ---
+# (데이터 저장 파일)
+CSV_FILE = 'detected_leaks.csv'
+# (NER 모델 경로)
+MODEL_PATH = 'my-ner-model' # 🎓 (봇 3)이 훈련시킬 뇌
+BASE_MODEL = 'klue/roberta-base-ner' # 🧠 기본 뇌 (Hugging Face)
+
+# (1차 탐지용 정규식 패턴)
+REGEX_PATTERNS = {
+    'EMAIL': r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
+    'PHONE': r'\b010[-.\s]?\d{4}[-.\s]?\d{4}\b',
+    # (패턴 추가 가능)
+    # 'API_KEY': r'sk_[a-zA-Z0-9]{32,}' 
+}
+
+# (크롤링할 대상)
+# 🚨 TODO: 'YOUR_GITHUB_ID'와 'YOUR_REPO_NAME'을 실제 깃허브 ID와 리포지토리 이름으로 바꾸세요!
+TEST_URLS = [
+    'https://jihun0948.github.io/PII-Guardian/test_site/index.html',
+    'https://jihun0948.github.io/PII-Guardian/test_site/page_with_image.html'
+]
+
+# (깃허브 검색어 - 주석 처리됨)
+GITHUB_QUERIES = [
+    '"ncp_api_key"',     # NCP API 키
+    '"IM뱅크" "비밀번호"',
+]
+
+# --- 2. 봇의 '뇌' (AI 모델) 로드 ---
+def load_ner_pipeline():
+    """봇의 '뇌'(NER 모델)를 로드합니다."""
+    try:
+        # 1순위: 우리가 학습시킨 '경력직' 뇌(my-ner-model)를 로드
+        tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
+        model = AutoModelForTokenClassification.from_pretrained(MODEL_PATH)
+        print(f"✅ '경력직' AI 뇌({MODEL_PATH}) 로드 성공!")
+    except Exception:
+        # 2순위: 1순위가 실패하면 '신입' 뇌(klue/roberta)를 로드
+        print(f"⚠️ '경력직' AI 뇌({MODEL_PATH})를 찾을 수 없습니다. '신입' 뇌({BASE_MODEL})를 로드합니다.")
+        tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
+        model = AutoModelForTokenClassification.from_pretrained(BASE_MODEL)
+        
+    # AI 모델을 사용하기 쉽게 '파이프라인'으로 만듦
+    # device=0은 GPU 사용, -1은 CPU 사용
+    ner_pipeline = pipeline("ner", model=model, tokenizer=tokenizer, device=-1, aggregation_strategy="simple")
+    return ner_pipeline
+
+# --- 3. 유출 탐지 함수 (텍스트용) ---
+def find_leaks_in_text(text, ner_pipeline):
+    """주어진 텍스트에서 RegEx와 NER로 PII를 찾습니다."""
+    leaks = []
+    
+    # (문맥 저장을 위해 텍스트 길이 제한)
+    context_preview = text.strip().replace('\n', ' ').replace('\r', ' ')[0:300]
+    
+    # 1. 정규식(RegEx)으로 먼저 탐지
+    for pii_type, pattern in REGEX_PATTERNS.items():
+        for match in re.finditer(pattern, text):
+            leaks.append({
+                'type': pii_type,
+                'content': match.group(0),
+                'context': context_preview
+            })
+            
+    # 2. AI(NER)로 추가 탐지 (예: 사람 이름)
+    try:
+        ner_results = ner_pipeline(text)
+        for entity in ner_results:
+            # klue/roberta-base-ner는 'PS'(사람이름)을 탐지
+            if entity['entity_group'] == 'PS':
+                leaks.append({
+                    'type': 'PERSON (AI)',
+                    'content': entity['word'],
+                    'context': context_preview
+                })
+    except Exception as e:
+        print(f"❌ [AI 분석 에러] {e}")
+            
+    return leaks
+
+# --- 4. 크롤링 함수 (테스트 사이트용) ---
+def crawl_test_site(url, ner_pipeline):
+    """(기능 1) 하나의 '테스트 URL'을 크롤링합니다."""
+    print(f"🕵️ [테스트 사이트] 크롤링 시작: {url}")
+    leaks_found = []
+    try:
+        response = requests.get(url, timeout=10)
+        response.encoding = 'utf-8' 
+        soup = BeautifulSoup(response.text, 'html.parser')
+        page_text = soup.body.get_text(separator=' ')
+        
+        # 4-1. 텍스트에서 유출 탐지
+        leaks_found.extend(find_leaks_in_text(page_text, ner_pipeline))
+        
+        # 4-2. 이미지(OCR)에서 유출 탐지
+        images = soup.find_all('img')
+        for img in images:
+            try:
+                img_url = img['src']
+                # (상대 경로를 절대 경로로 변환)
+                if not img_url.startswith('http'):
+                    img_url = urljoin(url, img_url)
+                
+                print(f"🖼️  이미지 스캔 중... {img_url}")
+                ocr_text = ocr_helper.get_ocr_text(img_url) # ocr_helper.py 호출
+                
+                if ocr_text:
+                    image_leaks = find_leaks_in_text(ocr_text, ner_pipeline)
+                    if image_leaks:
+                        print(f"🚨 [OCR 탐지!] {img_url} 에서 {len(image_leaks)}건 발견!")
+                        leaks_found.extend(image_leaks)
+            except Exception as e:
+                print(f"❌ [이미지 에러] {img['src']} 스캔 실패: {e}")
+
+        return leaks_found
+            
+    except Exception as e:
+        print(f"❌ [에러] {url} 크롤링 실패: {e}")
+        return []
+
+# --- 5. 깃허브 검색 함수 (주석 처리됨) ---
+def search_github_api(query, ner_pipeline):
+    """(기능 2) GitHub API로 '실제' 소스 코드를 검색합니다."""
+    print(f"🛰️ [GitHub API] 검색 시작: {query}")
+    
+    API_URL = "https://api.github.com/search/code"
+    headers = {
+        "Authorization": f"token {config.GITHUB_TOKEN}", 
+        "Accept": "application/vnd.github.v3.text-match+json" 
+    }
+    params = {'q': query, 'sort': 'indexed', 'order': 'desc', 'per_page': 10} 
+    
+    total_leaks = []
+    try:
+        response = requests.get(API_URL, headers=headers, params=params, timeout=10)
+        response.raise_for_status() 
+        results = response.json()
+        
+        if 'items' not in results or not results['items']:
+            print("✅ [GitHub API] 탐지된 내역 없음.")
+            return []
+            
+        for item in results['items']:
+            file_url = item['html_url']
+            repo_name = item['repository']['full_name']
+            
+            code_context = ""
+            if 'text_matches' in item and item['text_matches']:
+                 code_context = item['text_matches'][0]['fragment']
+            
+            if code_context:
+                leaks = find_leaks_in_text(code_context, ner_pipeline)
+                for leak in leaks:
+                    leak['url'] = file_url 
+                    leak['repo'] = repo_name
+                total_leaks.extend(leaks)
+        
+        if total_leaks:
+            print(f"🚨 [GitHub 탐지!] 총 {len(total_leaks)}건 발견!")
+        return total_leaks
+        
+    except Exception as e:
+        print(f"❌ [GitHub API 에러] {e}")
+        return []
+
+# --- 6. CSV 저장 함수 ---
+def save_to_csv(all_leaks):
+    """탐지된 모든 내역을 '의심' 목록(CSV)에 '추가'합니다."""
+    if not all_leaks:
+        return
+            
+    new_df = pd.DataFrame(all_leaks)
+    
+    if os.path.exists(CSV_FILE):
+        # 기존 파일이 있으면, 중복된 내용을 제거하고 추가
+        existing_df = pd.read_csv(CSV_FILE)
+        combined_df = pd.concat([existing_df, new_df])
+        # 'content'와 'url'이 모두 똑같은 중복은 제거
+        final_df = combined_df.drop_duplicates(subset=['content', 'url'])
+    else:
+        final_df = new_df
+        
+    final_df.to_csv(CSV_FILE, index=False, encoding='utf-8-sig')
+    print(f"💾 '의심' 목록 저장 완료: {len(final_df)} 건")
+
+# --- 7. 메인 실행 ---
+if __name__ == "__main__":
+    print("🤖 1. '신입' 봇(Crawler) 작동 시작...")
+    
+    print("🧠 봇의 AI 뇌(NER 모델)를 로드하는 중...")
+    ner_brain = load_ner_pipeline()
+    print("🧠 AI 뇌 로드 완료.")
+    
+    total_leaks_found = []
+    
+    # (필수) 테스트 사이트 크롤링
+    for url in TEST_URLS:
+        leaks = crawl_test_site(url, ner_brain)
+        for leak in leaks:
+            leak['url'] = url 
+            leak['repo'] = 'test-site'
+        total_leaks_found.extend(leaks)
+        
+    # (선택) 실제 GitHub API 검색
+    # 🚨 나중에 추가하고 싶으면 이 아래 주석(#)을 풀면 됩니다!
+    # print("🛰️ [GitHub API] 검색을 시작합니다...")
+    # if not config.GITHUB_TOKEN:
+    #     print("⚠️ config.py에 GITHUB_TOKEN이 없습니다. GitHub 검색을 건너뜁니다.")
+    # else:
+    #     for q in GITHUB_QUERIES:
+    #         leaks = search_github_api(q, ner_brain)
+    #         total_leaks_found.extend(leaks)
+    #         time.sleep(5) # (중요) API 제한을 피하기 위해 5초간 휴식
+            
+    # 최종 결과 저장
+    if total_leaks_found:
+        save_to_csv(total_leaks_found)
+    
+    print("🤖 1. '신입' 봇(Crawler) 작동 완료.")

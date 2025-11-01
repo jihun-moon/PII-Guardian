@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>테스트 페이지 1</title>
+</head>
+<body>
+    <h1>텍스트 유출 테스트 페이지</h1>
+    <p>
+        이 페이지는 봇이 텍스트(HTML)에서 개인정보를 잘 찾는지 테스트하기 위한 페이지입니다.
+    </p>
+    
+    <h2>유출 의심 정보</h2>
+    <ul>
+        <li>관리자 이메일: admin-test@my-cool-bot.com</li>
+        <li>긴급 연락처: 010-1234-5678</li>
+        <li>개발팀장: 홍길동</li>
+    </ul>
+
+    <h2>정상 정보 (무시해야 함)</h2>
+    <ul>
+        <li>대표 전화: 1588-0000</li>
+        <li>주소: 서울시 어딘가</li>
+    </ul>
+
+    <!-- 
+        주석(Comment) 안에 숨겨진 정보도 찾아야 합니다.
+        - 백업 담당자: 010-9876-5432
+        - API 키 (가짜): sk_abcdefg1234567890
+    -->
+</body>
+</html>
