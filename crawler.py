@@ -1,5 +1,5 @@
 # 🕵️ (봇 1) '신입' 봇. '의심' 내역 수집 -> detected_leaks.csv
-# (v2.17 - Selenium + 금융/민감 PII 패턴 확장)
+# (v2.20 - Selenium + 금융/민감 PII 패턴 확장 + 로그 중복 제거 + URL 수정)
 
 import requests
 from bs4 import BeautifulSoup
@@ -48,12 +48,12 @@ REGEX_PATTERNS = {
     'PHONE_GENERAL': r'\b0[2-9][0-9]?[-.\s]?\d{3,4}[-.\s]?\d{4}\b' # (1588 등) 일반 전화
 }
 
-# (✨✨✨ 핵심 수정 2: 탐지할 URL 변경 ✨✨✨)
+# (✨✨✨ 핵심 수정 2: 탐지할 URL '정확한' 주소로 변경 ✨✨✨)
 CRAWL_URLS = [
-    # (신규) 1단계에서 GitHub에 Push한 텍스트 종합 테스트 파일
+    # (수정) 텍스트 종합 테스트 파일
     "https://github.com/jihun-moon/PII-Guardian/blob/main/test_site/index.html",
     
-    # (신규) 1단계에서 GitHub에 Push한 이미지 종합 테스트 파일 (텍스트만 읽기)
+    # (수정) 이미지 종합 테스트 파일 (텍스트만 읽기)
     "https://github.com/jihun-moon/PII-Guardian/blob/main/test_site/page_with_image.html",
 ]
 
@@ -87,7 +87,6 @@ def setup_selenium_driver():
 # --- 2. 봇의 '뇌' (AI 모델) 로드 ---
 def load_ner_pipeline():
     """봇의 '뇌'(NER 모델)를 로드합니다."""
-    # (내용 동일 - 생략)
     token_file_path = "/root/.cache/huggingface/token"
     hf_token = None
     if os.path.exists(token_file_path):
@@ -138,7 +137,6 @@ def find_leaks_in_text(text, ner_pipeline):
         
     context_preview = text.strip().replace('\n', ' ').replace('\r', ' ')[0:300]
     
-    # (✨ 수정) 모든 패턴(금융정보 포함)을 탐지
     for pii_type, pattern in REGEX_PATTERNS.items():
         for match in re.finditer(pattern, text):
             is_duplicate = False
@@ -157,7 +155,6 @@ def find_leaks_in_text(text, ner_pipeline):
     try:
         ner_results = ner_pipeline(text[:512]) 
         for entity in ner_results:
-            # (✨ 수정) '경력직' 뇌가 학습할 'PII' 태그 추가
             if entity['entity_group'] in ['PS', 'LC', 'OG', 'PII']: 
                 leak_type = entity['entity_group']
                 if leak_type == 'PS': leak_type = 'PERSON (AI)'
@@ -188,9 +185,6 @@ def crawl_web_page(page_url, ner_pipeline, driver):
         html_content = driver.page_source
         soup = BeautifulSoup(html_content, 'html.parser')
         
-        # (✨ 수정) GitHub 페이지는 'body' 대신 'article' 태그에 본문이 있음
-        # (혹은 'body'로 해도 무방하나, 'Skip to content...' 등 불필요한 텍스트가 포함됨)
-        # 우선은 범용성을 위해 'body'를 유지합니다.
         if not soup.body: 
             return []
             
@@ -211,7 +205,6 @@ def crawl_web_page(page_url, ner_pipeline, driver):
 # --- 6. CSV 저장 함수 ---
 def get_existing_keys(file_path):
     """CSV 파일에서 (content, url) 키 세트를 로드합니다."""
-    # (내용 동일 - 생략)
     if not os.path.exists(file_path):
         return set()
     try:
@@ -228,7 +221,6 @@ def get_existing_keys(file_path):
 
 def save_to_csv(all_leaks):
     """탐지된 모든 내역을 '의심' 목록(CSV)에 '추가'합니다."""
-    # (내용 동일 - 생략)
     if not all_leaks:
         return
             
@@ -273,8 +265,6 @@ if __name__ == "__main__":
     # --- Selenium을 사용한 실제 웹사이트 크롤링 ---
     logging.info(f"🛰️ [Selenium 크롤링] {len(CRAWL_URLS)}개의 URL을 스캔합니다. (OCR 비활성화)")
     for url in CRAWL_URLS:
-        # (✨✨✨ 핵심 수정 v2.13 ✨✨✨)
-        # 'ner_pipeline' (잘못된 이름) -> 'ner_brain' (올바른 변수명)으로 수정
         leaks = crawl_web_page(url, ner_brain, driver) 
         for leak in leaks:
             leak['url'] = url 
@@ -288,13 +278,11 @@ if __name__ == "__main__":
 
     # (깃허브 API 검색은 여전히 주석 처리)
             
-    # (✨✨✨ 핵심 수정 v2.12 ✨✨✨)
     # 최종 결과 저장 (로그 추가)
     if total_leaks_found:
         logging.info(f"✅ 총 {len(total_leaks_found)}개의 PII를 탐지했습니다. CSV 저장을 시작합니다.")
         save_to_csv(total_leaks_found)
     else:
-        # (이 로그가 없어서 사용자가 헷갈렸음)
         logging.info("✅ PII 탐지 결과: 0건. CSV 파일을 생성하지 않습니다.") 
     
     logging.info("🤖 1. '신입' 봇(Crawler) 작동 완료.")
