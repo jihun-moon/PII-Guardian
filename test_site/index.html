@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>메가 시나리오 테스트 (v3)</title>
+    <title>메가 시나리오 테스트 (v3.2)</title>
     <style>
         body { font-family: sans-serif; line-height: 1.6; padding: 20px; max-width: 900px; margin: auto; background: #f4f4f4; }
         h1, h2, h3 { color: #333; border-bottom: 2px solid #ccc; padding-bottom: 5px;}
@@ -15,8 +15,8 @@
     </style>
 </head>
 <body>
-    <h1>메가 시나리오 테스트 (v3)</h1>
-    <p>강화된 Regex 봇과 Prompt가 적용된 LLM 봇을 종합적으로 테스트합니다.</p>
+    <h1>메가 시나리오 테스트 (v3.2)</h1>
+    <p>강화된 Regex 봇(v3.2)과 Prompt가 적용된 LLM 봇을 종합적으로 테스트합니다.</p>
 
     <div class="content">
         <h2>(시나리오 2) 공식적인 '공개' 정보 (오탐 방지)</h2>
@@ -36,12 +36,12 @@
         
         <div class="comment-section">
             <p><strong>작성자: 박영희</strong></p>
-            <p>IM뱅크 연동 오류... 제 연락처 남깁니다. <strong>01011112222</strong> (하이픈 없음) 연락주세요. 
-               제 주민번호 앞자리는 <strong>901231</strong> 입니다. (뒷자리는 1234567)</p>
+            <p>IM뱅크 연동 오류... 제 <span class="warning">전번(줄임말)</span> 남깁니다. <strong>01011112222</strong> (하이픈 없음) 연락주세요. 
+               제 <span class="warning">주민(줄임말)</span> 앞자리는 <strong>901231</strong> 입니다. (뒷자리는 1234567)</p>
         </div>
         <div class="comment-section">
             <p><strong>작성자: 이순신</strong></p>
-            <p>개인 이메일 <strong>sunsin_lee@naver.com</strong>으로 공유 부탁드립니다.
+            <p>개인 <span class="warning">멜(줄임말)</span> <strong>sunsin_lee@naver.com</strong>으로 공유 부탁드립니다.
                제 카드(비자) <strong>4500 1234 5678 9012</strong> (공백 구분) 결제가 안됩니다.</p>
         </div>
         <div class="comment-section">
@@ -53,7 +53,7 @@
         </div>
         <div class="comment-section">
             <p><strong>작성자: customer_service (직원 실수)</strong></p>
-            <p>고객님, 계좌 <strong>112501234567 (DGB)</strong> (하이픈 없음)에서 출금 시... (중략)</p>
+            <p>고객님, <span class="warning">계좌(줄임말)</span> <strong>112501234567 (DGB)</strong> (하이픈 없음)에서 출금 시... (중략)</p>
         </div>
     </div>
 
@@ -69,10 +69,21 @@
 [ERROR] Transaction failed for card 4500-0000-0000-0000 (Test Card) ... [공개/샘플]
 [DEBUG] Sample RRN: 990101-1000000 ... [공개/샘플]
 [DEBUG] Running test for user_id 112113114 ... (단순 숫자, 오탐) [공개]
-[DEBUG] Batch process 115 116 117 completed. (단순 숫자, 오탐) [공개]
+[DEBUG] Batch process 115 116 177 completed. (단순 숫자, 오탐) [공개]
 [INFO] Jenkins Build #123456789 success. (단순 숫자, 오탐) [공개]
             </pre>
         </div>
+    </div>
+    
+    <div class="content">
+        <h2>(시나리오 5) 난독화(Obfuscation) 및 줄임말 테스트</h2>
+        <p>탐지 봇을 피하기 위한 패턴입니다. '유출'로 판단되어야 합니다.</p>
+        <ul>
+            <li>제 <span class="warning">전번</span>은 <span class="warning">영일영-둘둘둘둘-삼삼삼삼</span> 입니다. (한글)</li>
+            <li>급해서 <span class="warning">계번</span> 남깁니다: <span class="warning">농협 302.1234.5678.01</span> (점으로 구분)</li>
+            <li>이메일: <span class="warning">my_email (at) gmail.com</span> (봇 회피용)</li>
+            <li>카드: <span class="warning">4500.1234.5678.9012</span> (점으로 구분)</li>
+        </ul>
     </div>
 
     <div class="footer">
