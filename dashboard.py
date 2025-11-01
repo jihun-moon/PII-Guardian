@@ -124,11 +124,11 @@ with tab2:
         st.cache_data.clear() # 캐시 비우기
         st.rerun()
         
-    st.subheader(f"📝 '신입' 봇이 수집한 '의심' 목록 ({DETECTED_FILE})")
+    st.subheader(f"📝 '신입' 봇의 '받은 편지함' ({DETECTED_FILE})")
     df_detected = load_csv(DETECTED_FILE)
     st.dataframe(df_detected, use_container_width=True)
         
-    st.subheader(f"✅ '전문가' 봇이 만든 '정답' 목록 ({FEEDBACK_FILE})")
+    st.subheader(f"✅ '전문가' 봇이 만든 '누적 정답' ({FEEDBACK_FILE})")
     df_feedback = load_csv(FEEDBACK_FILE)
     st.dataframe(df_feedback, use_container_width=True)
 
@@ -142,4 +142,3 @@ with tab3:
         st.subheader(log_name)
         log_content = read_log_file(log_path)
         st.text_area(f"Log: {log_path}", log_content, height=300, key=log_path)
-

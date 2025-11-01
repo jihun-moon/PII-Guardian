@@ -21,9 +21,13 @@ def load_trained_log():
     """이미 학습한 항목(중복 학습 방지용)을 불러옵니다."""
     if not os.path.exists(TRAINED_LOG_FILE):
         return set()
-    with open(TRAINED_LOG_FILE, 'r', encoding='utf-8') as f:
-        # (content, url)을 합친 고유 ID를 set으로 저장
-        return set(line.strip() for line in f)
+    try:
+        with open(TRAINED_LOG_FILE, 'r', encoding='utf-8') as f:
+            # (content, url)을 합친 고유 ID를 set으로 저장
+            return set(line.strip() for line in f)
+    except Exception as e:
+        print(f"⚠️ 'trained.log' 로드 실패: {e}")
+        return set()
 
 def save_trained_log(unique_id):
     """학습 완료된 항목을 기록합니다."""
