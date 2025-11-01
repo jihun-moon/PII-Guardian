@@ -16,7 +16,7 @@ from selenium.webdriver.chrome.service import Service # (✨ 신규)
 
 # 우리 헬퍼 및 설정 파일 임포트
 import config
-import oclear_helper # (OCR은 여전히 비활성화)
+import ocr_helper # (OCR은 여전히 비활성화)
 
 # --- 1. 설정값 ---
 BASE_PATH = "/root/PII-Guardian"
