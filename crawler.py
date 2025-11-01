@@ -36,10 +36,10 @@ REGEX_PATTERNS = {
     'PHONE': r'\b010[-.\s]?\d{4}[-.\s]?\d{4}\b',
 }
 
-# --- 탐지할 URL (이제 dcinside.com도 가능) ---
+# --- 탐지할 URL ---
 CRAWL_URLS = [
-    "https://www.dcinside.com/", # (동적 사이트)
-    "https://comsoft.daegu.ac.kr/comsoft/professor.do", # (정적 사이트)
+    "https://github.com/jihun-moon/PII-Guardian/blob/main/test_site/index.html",
+    "https://github.com/jihun-moon/PII-Guardian/blob/main/test_site/page_with_image.html",
 ]
 
 # (✨ 신규) Selenium 드라이버 설정
