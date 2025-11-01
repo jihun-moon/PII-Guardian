@@ -3,126 +3,82 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>종합 PII 테스트 허브 (v2)</title>
+    <title>메가 시나리오 테스트 (v3)</title>
     <style>
-        body { font-family: sans-serif; line-height: 1.6; padding: 20px; max-width: 900px; margin: auto; }
-        h1, h2, h3 { color: #333; }
-        .content { background: #f9f9f9; border: 1px solid #ddd; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-        .comment-section { background: #eee; border: 1px solid #ccc; padding: 15px; border-radius: 8px; }
-        .footer { text-align: center; color: #777; margin-top: 30px; border-top: 1px solid #eee; padding-top: 10px; }
+        body { font-family: sans-serif; line-height: 1.6; padding: 20px; max-width: 900px; margin: auto; background: #f4f4f4; }
+        h1, h2, h3 { color: #333; border-bottom: 2px solid #ccc; padding-bottom: 5px;}
+        .content { background: #fff; border: 1px solid #ddd; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .comment-section { background: #fdfdfd; border: 1px solid #eee; padding: 10px; margin-top: 10px; }
+        .footer { text-align: center; color: #777; margin-top: 30px; }
+        .code { background: #2d2d2d; color: #c0c0c0; padding: 15px; border-radius: 5px; overflow-x: auto; }
         .warning { color: red; font-weight: bold; }
     </style>
 </head>
 <body>
-
-    <h1>종합 PII 유출 테스트 허브 (v2)</h1>
-    <p>이 페이지는 PII-Guardian 봇의 텍스트, 주석, 문맥 파악 능력을 테스트하기 위한 종합 페이지입니다.</p>
-
-    <!-- 
-      (시나리오 1: 주석에 숨겨진 명백한 유출 정보)
-      LLM은 '유출(Leak)'로 판단해야 합니다.
-    -->
-    <!-- 
-      [비상 연락망]
-      - 서버실 백업 담당 (김철수): 010-9876-5432
-      - 임시 DB 비밀번호: temp_db_pass_123!
-      - IM뱅크 테스트 API 키 (외부 노출 절대 금지): im-key-prod-abcdefg1234567890xyz
-    -->
+    <h1>메가 시나리오 테스트 (v3)</h1>
+    <p>강화된 Regex 봇과 Prompt가 적용된 LLM 봇을 종합적으로 테스트합니다.</p>
 
     <div class="content">
-        <h2>(시나리오 2) 공식적인 '공개' 정보</h2>
-        <p>이 정보들은 탐지는 되어야 하지만, LLM이 문맥을 보고 '공개(Public)'로 판단해야 합니다.</p>
+        <h2>(시나리오 2) 공식적인 '공개' 정보 (오탐 방지)</h2>
+        <p>LLM이 문맥을 보고 '공개(Public)'로 판단해야 합니다.</p>
         <ul>
-            <li>(주)PII-Guardian 고객센터: 1588-0000 (대표전화)</li>
+            <li>(주)PII-Guardian 고객센터: (02) 1588-0000 (괄호 + 일반전화)</li>
+            <li>대표 팩스: 02 1234 5678 (공백 구분)</li>
             <li>기술 지원 이메일: support@pii-guardian.com</li>
             <li>회사 주소: 대구광역시 중구 달구벌대로 2095 (DGB대구은행 본점 주소 예시)</li>
-            <li>채용 문의: recruit@pii-guardian.com</li>
+            <li>사업자등록번호: 123-45-67890 (LLM이 '공개'로 판단해야 함)</li>
         </ul>
     </div>
 
     <div class="content">
-        <h2>(시나리오 3) 게시판 형식의 '유출' 정보</h2>
-        <p>사용자 게시물이나 Q&A에 실수로 노출된 개인정보입니다. LLM이 '유출(Leak)'로 판단해야 합니다.</p>
+        <h2>(시나리오 3) Q&A 게시판 (다양한 변형 '유출')</h2>
+        <p>사용자들이 실수로 남긴 다양한 형태의 PII입니다. '유출(Leak)'로 판단되어야 합니다.</p>
         
         <div class="comment-section">
-            <h3>Q&A: IM뱅크 연동 오류</h3>
-            <p><strong>작성자: 박영희 (younghee_park)</strong></p>
-            <p>
-                안녕하세요. IM뱅크 API 연동 중 403 에러가 계속 뜹니다.
-                제 환경은... (중략) ... 
-                혹시 몰라 제 연락처 남깁니다. <strong>010-1111-2222</strong>로 연락 주시면 감사하겠습니다.
-                <span class="warning">(AI-NER가 '박영희'라는 이름(PS)도 탐지해야 함)</span>
-            </p>
-            <hr>
-            <p><strong>작성자: 이순신 (dev_lee)</strong></p>
-            <p>
-                저도 같은 문제입니다. 제 개인 이메일 <strong>sunsin_lee@naver.com</strong>으로 해결 방법 아시는 분 공유 부탁드립니다.
-                로그를 보니 DGB API 키가 만료된 것 같기도 한데...
-            </p>
+            <p><strong>작성자: 박영희</strong></p>
+            <p>IM뱅크 연동 오류... 제 연락처 남깁니다. <strong>01011112222</strong> (하이픈 없음) 연락주세요. 
+               제 주민번호 앞자리는 <strong>901231</strong> 입니다. (뒷자리는 1234567)</p>
         </div>
-    </div>
-
-    <div class="content">
-        <h2>(시나리오 4) 애매한 정보 (가짜/샘플)</h2>
-        <p>정규식에는 걸리지만, 문맥상 '공개' 또는 '샘플'로 분류되어야 합니다.</p>
-        <ul>
-            <li>이메일 정규식 예제: `\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b`</li>
-            <li>전화번호 샘플: `010-0000-0000` (샘플용 번호)</li>
-            <li>테스트용 이메일: `test@example.com` (공용 테스트 주소)</li>
-        </ul>
-    </div>
-
-    <!-- ✨ (신규) 시나리오 5: 금융 정보 (IM 뱅크 특화) ✨ -->
-    <div class="content">
-        <h2>(시나리오 5) 금융 정보 '유출' (IM 뱅크 특화)</h2>
-        <p>DGB대구은행에서 민감하게 반응할 금융 PII입니다. '유출(Leak)'로 판단되어야 합니다.</p>
         <div class="comment-section">
-            <p><strong>작성자: customer_service (직원 실수)</strong></p>
-            <p>
-                고객님, 문의하신 내역 확인했습니다.
-                해당 오류는 고객님 계좌 <strong>112-50-1234567 (DGB)</strong>에서 출금 시 발생한... (중략)
-                혹시 카드 <strong>4500-1234-5678-9012</strong> (비자) 만료일이... (중략)
-            </p>
+            <p><strong>작성자: 이순신</strong></p>
+            <p>개인 이메일 <strong>sunsin_lee@naver.com</strong>으로 공유 부탁드립니다.
+               제 카드(비자) <strong>4500 1234 5678 9012</strong> (공백 구분) 결제가 안됩니다.</p>
         </div>
-    </div>
-
-    <!-- ✨ (신규) 시나리오 6: 민감 정보 (주민번호/여권) ✨ -->
-    <div class="content">
-        <h2>(시나리오 6) 최고 등급 민감 정보 '유출'</h2>
-        <p>가장 치명적인 PII 유형입니다. '유출(Leak)'로 판단되어야 합니다.</p>
         <div class="comment-section">
             <p><strong>작성자: new_user</strong></p>
-            <p>
-                가입이 안 돼요. 본인 인증 오류라는데 확인 좀 해주세요.
-                - 이름: 김대한
-                - 주민번호: <strong>901231-1234567</strong>
-                - 여권번호: <strong>M12345678</strong>
-            </p>
+            <p>가입이 안 돼요. 본인 인증 오류... 
+               - 이름: 김대한
+               - 주민번호: <strong>9012311234567</strong> (하이픈 없음)
+               - 여권번호: <strong>M12345678</strong></p>
+        </div>
+        <div class="comment-section">
+            <p><strong>작성자: customer_service (직원 실수)</strong></p>
+            <p>고객님, 계좌 <strong>112501234567 (DGB)</strong> (하이픈 없음)에서 출금 시... (중략)</p>
         </div>
     </div>
 
-    <!-- ✨ (신규) 시나리오 7: 기술/인프라 정보 유출 ✨ -->
     <div class="content">
-        <h2>(시나리오 7) 내부 기술 정보 '유출'</h2>
-        <p>보안팀이 탐지해야 할 내부 시스템 정보입니다. '유출(Leak)'로 판단되어야 합니다.</p>
-        <!-- 
-          개발자가 실수로 남긴 내부망 접속 정보
-        -->
-        <!-- 
-          [임시 개발 서버]
-          - 접속: ssh admin@192.168.1.100
-          - DB서버 IP: 10.0.0.5 (내부망)
-          - Jenkins: http://jenkins.internal.dgb.co.kr:8080
-        -->
-        <p>내부망 테스트 완료. (로그: `Connection established to 192.168.1.100`)</p>
+        <h2>(시나리오 4) 개발자 로그 및 코드 (오탐 + 유출)</h2>
+        <p>LLM이 '유출'과 '오탐'을 정확히 구분해야 합니다.</p>
+        <div class="code">
+            <pre>
+[INFO] DB Connection Test...
+[INFO] Connecting to 10.0.0.5 (Internal DB) ... [유출]
+[INFO] User 'admin' login success from 192.168.1.100 ... [유출]
+[CONFIG] API_KEY = "pk-asdfqwerzxcv1234567890asdf" ... [유출]
+[ERROR] Transaction failed for card 4500-0000-0000-0000 (Test Card) ... [공개/샘플]
+[DEBUG] Sample RRN: 990101-1000000 ... [공개/샘플]
+[DEBUG] Running test for user_id 112113114 ... (단순 숫자, 오탐) [공개]
+[DEBUG] Batch process 115 116 117 completed. (단순 숫자, 오탐) [공개]
+[INFO] Jenkins Build #123456789 success. (단순 숫자, 오탐) [공개]
+            </pre>
+        </div>
     </div>
 
-
     <div class="footer">
-        (주) PII-Guardian | 대표: 홍길동 | 사업자등록번호: 123-45-67890<br>
+        (주) PII-Guardian | 대표: 홍길동 | 사업자등록번호: 1234567890 (하이픈 없음)<br>
         (AI-NER가 '홍길동'을 탐지하되, LLM이 '대표'라는 문맥을 보고 '공개'로 판단해야 함)
     </div>
 
 </body>
 </html>
-
