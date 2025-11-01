@@ -1,4 +1,5 @@
 # 🧑‍🏫 (봇 2) '전문가' 봇(LLM). 100% '자동' 정답 생성 -> feedback_data.csv
+# (v2.1 - 로그 중복 제거)
 # ----------------------------------------------------
 # (✨ 최종 로직: In/Outbox)
 # 1. '의심' 목록 (detected_leaks.csv) [In_1]을 읽습니다.
@@ -61,7 +62,6 @@ def main():
         logging.info(f"🧠 LLM(HyperCLOVA)에게 판단 요청: {row['content']}")
         
         try:
-            # (✨ 수정) llm_helper도 수정되어야 함 (print -> logging)
             result = llm_helper.get_llm_judgment(row['context'], row['content'])
             
             feedback = row.to_dict()
