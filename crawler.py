@@ -34,7 +34,6 @@ REGEX_PATTERNS = {
 }
 
 # (크롤링할 대상)
-# 🚨 TODO: 'YOUR_GITHUB_ID'와 'YOUR_REPO_NAME'을 실제 깃허브 ID와 리포지토리 이름으로 바꾸세요!
 TEST_URLS = [
     'https://jihun0948.github.io/PII-Guardian/test_site/index.html',
     'https://jihun0948.github.io/PII-Guardian/test_site/page_with_image.html'
@@ -46,28 +45,38 @@ GITHUB_QUERIES = [
     '"IM뱅크" "비밀번호"',
 ]
 
-# --- 2. 봇의 '뇌' (AI 모델) 로드 ---
+# --- 2. 봇의 '뇌' (AI 모델) 로드 (✨ 최종 수정) ---
 def load_ner_pipeline():
     """봇의 '뇌'(NER 모델)를 로드합니다."""
+    
+    # (✨ 핵심 1) deploy.yml이 Crontab에 주입한 HF_TOKEN 환경 변수를 읽어옵니다.
+    hf_token = os.environ.get("HF_TOKEN")
+    if not hf_token:
+        print("⚠️ [경고] HF_TOKEN 환경 변수가 설정되지 않았습니다. config.py의 토큰을 시도합니다.")
+        # (차선책) config.py에서도 읽어오도록 시도
+        hf_token = getattr(config, 'HF_TOKEN', None) 
+
     try:
         # 1순위: 우리가 학습시킨 '경력직' 뇌(my-ner-model)를 로드
-        tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
-        model = AutoModelForTokenClassification.from_pretrained(MODEL_PATH)
+        # (✨ 핵심 2) '경력직' 뇌가 로컬이 아닌 Private Hub에 있을 경우를 대비해 토큰 전달
+        tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH, token=hf_token)
+        model = AutoModelForTokenClassification.from_pretrained(MODEL_PATH, token=hf_token)
         print(f"✅ '경력직' AI 뇌({MODEL_PATH}) 로드 성공!")
-    # (수정) Exception -> OSError로 변경 (더 명확한 오류 처리)
     except OSError: 
         # 2순위: 1순위가 실패하면 '신입' 뇌(klue/roberta)를 로드
         print(f"⚠️ '경력직' AI 뇌({MODEL_PATH})를 찾을 수 없습니다. '신입' 뇌({BASE_MODEL})를 로드합니다.")
-        tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
-        model = AutoModelForTokenClassification.from_pretrained(BASE_MODEL)
+        
+        # (✨ 핵심 3) '신입' 뇌 로드 시, 인증을 위해 토큰을 명시적으로 전달합니다.
+        tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, token=hf_token)
+        model = AutoModelForTokenClassification.from_pretrained(BASE_MODEL, token=hf_token)
         
     # AI 모델을 사용하기 쉽게 '파이프라인'으로 만듦
-    # device=0은 GPU 사용, -1은 CPU 사용
     ner_pipeline = pipeline("ner", model=model, tokenizer=tokenizer, device=-1, aggregation_strategy="simple")
     return ner_pipeline
 
 # --- 3. 유출 탐지 함수 (텍스트용) ---
 def find_leaks_in_text(text, ner_pipeline):
+# ... (이하 코드는 이전과 동일) ...
     """주어진 텍스트에서 RegEx와 NER로 PII를 찾습니다."""
     leaks = []
     
@@ -155,7 +164,7 @@ def search_github_api(query, ner_pipeline):
     
     API_URL = "https://api.github.com/search/code"
     headers = {
-        "Authorization": f"token {config.GITHUB_TOKEN}", 
+        "Authorization": f"token {getattr(config, 'GITHUB_TOKEN', '')}", 
         "Accept": "application/vnd.github.v3.text-match+json" 
     }
     params = {'q': query, 'sort': 'indexed', 'order': 'desc', 'per_page': 10} 
@@ -176,7 +185,7 @@ def search_github_api(query, ner_pipeline):
             
             code_context = ""
             if 'text_matches' in item and item['text_matches']:
-                 # (수정) text_matches는 여러 개일 수 있으므로 모두 합칩니다.
+                # (수정) text_matches는 여러 개일 수 있으므로 모두 합칩니다.
                 code_context = " ... ".join([match['fragment'] for match in item['text_matches']])
             
             if code_context:
@@ -205,26 +214,31 @@ def save_to_csv(all_leaks):
     # (✨ 개선 1) 이미 '정답지'에 있는 내역은 제외합니다.
     try:
         if os.path.exists(FEEDBACK_FILE):
-            feedback_df = pd.read_csv(FEEDBACK_FILE)
-            # '정답지'에 있는 (content, url) 쌍을 만듭니다.
-            # (url이 없는 'test-site'의 경우를 대비해 fillna 사용)
-            feedback_df['url'] = feedback_df['url'].fillna('test-site-url') # 임시 값
-            new_df['url'] = new_df['url'].fillna('test-site-url') # 임시 값
-            
-            feedback_keys = set(zip(feedback_df['content'], feedback_df['url']))
-            
-            # (content, url)이 '정답지'에 없는 것만 필터링
-            is_new = new_df.apply(lambda row: (row['content'], row['url']) not in feedback_keys, axis=1)
-            new_df = new_df[is_new]
-            
-            if len(new_df) == 0:
-                print("✅ 새로 발견된 '의심' 내역이 없습니다. (모두 '정답지'에 이미 존재)")
-                return
-            else:
-                print(f"✨ '정답지'와 비교 후, {len(new_df)}건의 '신규' 내역 발견!")
+            try:
+                feedback_df = pd.read_csv(FEEDBACK_FILE)
+            except pd.errors.EmptyDataError:
+                feedback_df = pd.DataFrame(columns=['content', 'url']) # 빈 DataFrame
+
+            if not feedback_df.empty:
+                # '정답지'에 있는 (content, url) 쌍을 만듭니다.
+                # (url이 없는 'test-site'의 경우를 대비해 fillna 사용)
+                feedback_df['url'] = feedback_df['url'].fillna('test-site-url') # 임시 값
+                new_df['url'] = new_df['url'].fillna('test-site-url') # 임시 값
+                
+                feedback_keys = set(zip(feedback_df['content'], feedback_df['url']))
+                
+                # (content, url)이 '정답지'에 없는 것만 필터링
+                is_new = new_df.apply(lambda row: (row['content'], row['url']) not in feedback_keys, axis=1)
+                new_df = new_df[is_new]
+                
+                if len(new_df) == 0:
+                    print("✅ 새로 발견된 '의심' 내역이 없습니다. (모두 '정답지'에 이미 존재)")
+                    return
+                else:
+                    print(f"✨ '정답지'와 비교 후, {len(new_df)}건의 '신규' 내역 발견!")
 
     except Exception as e:
-        print(f"⚠️ '정답지'({FEEDBACK_FILE}) 비교 중 오류 발생 (파일이 비어있을 수 있음): {e}")
+        print(f"⚠️ '정답지'({FEEDBACK_FILE}) 비교 중 오류 발생: {e}")
 
     # (✨ 개선 2) '의심' 목록(detected_leaks.csv) 내의 중복도 제거합니다.
     if os.path.exists(CSV_FILE):
@@ -260,18 +274,18 @@ if __name__ == "__main__":
         total_leaks_found.extend(leaks)
         
     # (선택) 실제 GitHub API 검색
-    # 🚨 나중에 추가하고 싶으면 이 아래 주석(#)을 풀면 됩니다!
-    # print("🛰️ [GitHub API] 검색을 시작합니다...")
-    # if not hasattr(config, 'GITHUB_TOKEN') or not config.GITHUB_TOKEN:
-    #     print("⚠️ config.py에 GITHUB_TOKEN이 없습니다. GitHub 검색을 건너뜁니다.")
-    # else:
-    #     for q in GITHUB_QUERIES:
-    #         leaks = search_github_api(q, ner_brain)
-    #         total_leaks_found.extend(leaks)
-    #         time.sleep(5) # (중요) API 제한을 피하기 위해 5초간 휴식
+    print("🛰️ [GitHub API] 검색을 시작합니다...")
+    if not hasattr(config, 'GITHUB_TOKEN') or not config.GITHUB_TOKEN:
+        print("⚠️ config.py에 GITHUB_TOKEN이 없습니다. GitHub 검색을 건너뜁니다.")
+    else:
+        for q in GITHUB_QUERIES:
+            leaks = search_github_api(q, ner_brain)
+            total_leaks_found.extend(leaks)
+            time.sleep(5) # (중요) API 제한을 피하기 위해 5초간 휴식
             
     # 최종 결과 저장
     if total_leaks_found:
         save_to_csv(total_leaks_found)
     
     print("🤖 1. '신입' 봇(Crawler) 작동 완료.")
+
