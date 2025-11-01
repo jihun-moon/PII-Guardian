@@ -1,5 +1,5 @@
 # 🕵️ (봇 1) '신입' 봇. '의심' 내역 수집 -> detected_leaks.csv
-# (v2.12 - 0건 탐지 시 로그 추가)
+# (v2.13 - NameError 수정)
 
 import requests
 from bs4 import BeautifulSoup
@@ -38,7 +38,9 @@ REGEX_PATTERNS = {
 
 # --- 탐지할 URL (이제 dcinside.com도 가능) ---
 CRAWL_URLS = [
-    "https://www.dcinside.com/"]
+    "https://www.dcinside.com/", # (동적 사이트)
+    "https://comsoft.daegu.ac.kr/comsoft/professor.do", # (정적 사이트)
+]
 
 # (✨ 신규) Selenium 드라이버 설정
 def setup_selenium_driver():
@@ -207,7 +209,7 @@ def save_to_csv(all_leaks):
         return
             
     new_df = pd.DataFrame(all_leaks)
-    new_df['url'] = new_df['url'].fillna('N/A')
+    new_df['url'] = new_df['url'].fillna('N.A')
     
     processed_keys = get_existing_keys(FEEDBACK_FILE)
     pending_keys = get_existing_keys(CSV_FILE)
@@ -228,7 +230,7 @@ if __name__ == "__main__":
     logging.info("🤖 1. '신입' 봇(Crawler) 작동 시작...")
     
     logging.info("🧠 봇의 AI 뇌(NER 모델)를 로드하는 중...")
-    ner_brain = load_ner_pipeline()
+    ner_brain = load_ner_pipeline() # <-- 변수명이 'ner_brain'
     if ner_brain is None:
         logging.error("❌ AI 뇌 로드에 실패하여 '신입' 봇을 종료합니다.")
         exit()
@@ -247,7 +249,9 @@ if __name__ == "__main__":
     # --- Selenium을 사용한 실제 웹사이트 크롤링 ---
     logging.info(f"🛰️ [Selenium 크롤링] {len(CRAWL_URLS)}개의 URL을 스캔합니다. (OCR 비활성화)")
     for url in CRAWL_URLS:
-        leaks = crawl_web_page(url, ner_pipeline, driver) 
+        # (✨✨✨ 핵심 수정 v2.13 ✨✨✨)
+        # 'ner_pipeline' (잘못된 이름) -> 'ner_brain' (올바른 변수명)으로 수정
+        leaks = crawl_web_page(url, ner_brain, driver) 
         for leak in leaks:
             leak['url'] = url 
             leak['repo'] = 'web-crawl' 
