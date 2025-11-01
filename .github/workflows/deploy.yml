@@ -12,37 +12,30 @@ jobs:
           printf '%b\n' "${{ secrets.NCP_SSH_KEY }}" > /tmp/ncp_key
           chmod 600 /tmp/ncp_key
 
-      # 2. 'root' 사용자로 접속하여 배포 (디버그 모드 -v 제거)
-      - name: Deploy to NCP VM via ssh (as root)
+      # 2. 'root' 사용자로 접속하여 배포
+      - name: Deploy and Restart Services (as root)
         env:
           NCP_HOST: ${{ secrets.NCP_HOST }}
-          # (중요) 이 시크릿은 'root'여야 합니다.
           NCP_USERNAME: ${{ secrets.NCP_USERNAME }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
-          # (참고) SSH 접속이 성공했으므로 디버그 옵션(-v)을 제거했습니다.
           ssh -i /tmp/ncp_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${NCP_USERNAME}@${NCP_HOST} \
             "GITHUB_REPOSITORY=${GITHUB_REPOSITORY} bash -s" <<'EOF'
             
-            # (중요) 스크립트 실행 중 하나라도 실패하면 즉시 중단합니다.
-            set -e
+            set -e # 오류 시 즉시 중단
 
-            # 'root'로 접속되었는지 확인
-            echo "Connecting as: $(whoami)"
-
-            # 0. 시스템 패키지 설치
-            echo "Updating packages..."
+            export DEPLOY_DIR="/root/PII-Guardian"
+            VENV_PATH="$DEPLOY_DIR/venv/bin"
+            
+            echo "--- 1. 시스템 및 코드 업데이트 시작 ---"
+            
+            # 0. 시스템 패키지 설치 및 업데이트
             apt-get update
-            # 'python3-venv' 패키지를 추가 (가상 환경 생성에 필수)
             apt-get install -y python3-pip git python3-venv
             
-            # 1. 배포할 폴더 경로를 'root' 사용자의 홈 디렉토리로 변경
-            export DEPLOY_DIR="/root/PII-Guardian"
-            
-            # 2. 레포지토리 클론 또는 풀
+            # 1. 레포지토리 클론/풀
             if [ ! -d "$DEPLOY_DIR" ]; then
               echo "Cloning repository..."
-              # 상위 디렉토리도 /root 로 변경
               cd /root
               git clone https://github.com/${GITHUB_REPOSITORY}.git $DEPLOY_DIR
             else
@@ -51,26 +44,55 @@ jobs:
               git pull
             fi
             
-            # 3. 의존성 설치 (가상 환경 사용)
+            # 2. 가상 환경 설정 및 의존성 설치
             cd $DEPLOY_DIR
-            
-            # 3a. 'venv'라는 이름의 가상 환경 폴더가 없으면 생성
             if [ ! -d "venv" ]; then
-              echo "Creating virtual environment at $DEPLOY_DIR/venv..."
+              echo "Creating virtual environment..."
               python3 -m venv venv
             fi
+            echo "Installing/Updating Python requirements..."
+            "$VENV_PATH/pip" install -r requirements.txt
             
-            # 3b. 가상 환경 내부의 pip를 사용하여 패키지 설치
-            echo "Installing requirements into venv..."
-            # (기존: pip3 install...)
-            venv/bin/pip install -r requirements.txt
+            echo "--- 2. 서비스 재시작 (업데이트 반영) ---"
             
-            # 4. 애플리케이션 재시작 (root는 'sudo'가 필요 없습니다)
-            # (참고: 4단계가 성공하려면, pii-guardian.service 파일도
-            # /root/PII-Guardian/venv/bin/python 을 사용하도록 설정되어 있어야 합니다.)
-            echo "Restarting application service..."
-            systemctl restart pii-guardian.service || true
-            
-            echo "✅ 배포 성공!"
-          EOF
+            # 3. Streamlit 대시보드 강제 종료 (새 코드를 로드하기 위해 필수)
+            echo "Killing old dashboard process..."
+            # 8501 포트 사용하는 모든 프로세스를 찾아서 종료합니다.
+            /usr/sbin/fuser -k 8501/tcp || true
 
+            # 4. Crontab 스케줄러를 가상 환경 경로로 수정 및 재등록
+            echo "Updating crontab paths..."
+            CRON_TEMP_FILE=$(mktemp)
+            
+            # 기존 crontab 내용을 임시 파일로 복사
+            crontab -l | grep -v 'my-cool-bot' > "$CRON_TEMP_FILE" || true
+
+            # 새로운 스케줄을 임시 파일에 추가 (🚨 my-cool-bot 대신 PII-Guardian 사용)
+            # @reboot 명령어는 새 코드를 반영하도록 수정했습니다.
+            cat <<EOL >> "$CRON_TEMP_FILE"
+# --- PII-Guardian AUTO SCHEDULE (Updated by GitHub Actions) ---
+# 1. (부팅 시) 아침에 서버 켜지면 '중앙 관제소' 실행
+@reboot $VENV_PATH/streamlit run $DEPLOY_DIR/dashboard.py --server.port=8501
+
+# 2. (매시간) '신입 봇(crawler.py)'이 매시 정각에 '의심' 내역 수집
+0 * * * * $VENV_PATH/python $DEPLOY_DIR/crawler.py >> $DEPLOY_DIR/crawler.log 2>&1
+
+# 3. (매일 새벽 1시) '전문가 봇(autolabeler.py)'이 '정답' 생성
+0 1 * * * $VENV_PATH/python $DEPLOY_DIR/autolabeler.py >> $DEPLOY_DIR/autolabeler.log 2>&1
+
+# 4. (매일 새벽 2시) '학습기(train.py)'가 '정답'으로 재학습
+0 2 * * * $VENV_PATH/python $DEPLOY_DIR/train.py >> $DEPLOY_DIR/train.log 2>&1
+# -----------------------------------------------------------------
+EOL
+
+            # 임시 파일을 Crontab에 다시 등록
+            crontab "$CRON_TEMP_FILE"
+            rm "$CRON_TEMP_FILE"
+            
+            # 5. 대시보드 다시 실행 (새 코드 반영)
+            echo "Starting new dashboard process..."
+            # nohup으로 실행하여 SSH 접속이 끊겨도 계속 실행되도록 합니다.
+            nohup "$VENV_PATH/streamlit" run "$DEPLOY_DIR/dashboard.py" --server.port=8501 > /dev/null 2>&1 &
+            
+            echo "✅ 배포 및 서비스 재시작 성공! (대시보드는 백그라운드에서 다시 실행됨)"
+          EOF
