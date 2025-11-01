@@ -50,16 +50,32 @@ GITHUB_QUERIES = [
 def load_ner_pipeline():
     """봇의 '뇌'(NER 모델)를 로드합니다."""
     
-    # (✨ 핵심 1) deploy.yml이 Crontab에 주입한 HF_TOKEN 환경 변수를 읽어옵니다.
-    hf_token = os.environ.get("HF_TOKEN")
+    # (✨ 핵심 수정)
+    # Crontab 환경 문제를 회피하기 위해, deploy.yml이 생성한
+    # 토큰 '파일'을 직접 읽어서 사용합니다.
+    token_file_path = "/root/.cache/huggingface/token"
+    hf_token = None
+    if os.path.exists(token_file_path):
+        try:
+            with open(token_file_path, 'r') as f:
+                hf_token = f.read().strip()
+            if hf_token:
+                 print("✅ Hugging Face 토큰 파일을 성공적으로 읽었습니다.")
+            else:
+                 print("⚠️ [경고] /root/.cache/huggingface/token 파일이 비어있습니다.")
+        except Exception as e:
+            print(f"⚠️ [경고] Hugging Face 토큰 파일 읽기 실패: {e}")
+    else:
+        print("⚠️ [경고] Hugging Face 토큰 파일(/root/.cache/huggingface/token)을 찾을 수 없습니다.")
+
+    # (차선책) 파일이 없을 경우, config.py에서도 시도
     if not hf_token:
-        print("⚠️ [경고] HF_TOKEN 환경 변수가 설정되지 않았습니다. config.py의 토큰을 시도합니다.")
-        # (차선책) config.py에서도 읽어오도록 시도
-        hf_token = getattr(config, 'HF_TOKEN', None) 
+        hf_token = getattr(config, 'HF_TOKEN', None)
+        if hf_token:
+             print("✅ config.py에서 HF_TOKEN을 로드했습니다.")
 
     try:
         # 1순위: 우리가 학습시킨 '경력직' 뇌(my-ner-model)를 로드
-        # (✨ 핵심 2) '경력직' 뇌가 로컬이 아닌 Private Hub에 있을 경우를 대비해 토큰 전달
         tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH, token=hf_token)
         model = AutoModelForTokenClassification.from_pretrained(MODEL_PATH, token=hf_token)
         print(f"✅ '경력직' AI 뇌({MODEL_PATH}) 로드 성공!")
@@ -268,7 +284,7 @@ if __name__ == "__main__":
     
     # (필수) 테스트 사이트 크롤링
     for url in TEST_URLS:
-        leaks = crawl_test_site(url, ner_brain)
+        leaks = crawl_test_site(url, ner_pipeline)
         for leak in leaks:
             leak['url'] = url 
             leak['repo'] = 'test-site'
@@ -289,5 +305,4 @@ if __name__ == "__main__":
         save_to_csv(total_leaks_found)
     
     print("🤖 1. '신입' 봇(Crawler) 작동 완료.")
-
 

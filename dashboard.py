@@ -12,7 +12,6 @@ import subprocess # 봇을 백그라운드에서 실행
 import time
 
 # --- 1. 경로 설정 (NCP 서버의 절대 경로) ---
-# (🚨 'my-cool-bot'은 2-4단계에서 정한 폴더 이름으로 통일)
 BASE_PATH = "/root/PII-Guardian" 
 CRAWLER_SCRIPT = os.path.join(BASE_PATH, "crawler.py")
 LABELER_SCRIPT = os.path.join(BASE_PATH, "autolabeler.py")
@@ -27,16 +26,25 @@ LOG_FILES = {
     "Train Log (학습기)": os.path.join(BASE_PATH, "train.log")
 }
 
-# --- 2. 봇 실행 함수 ---
+# --- 2. 봇 실행 함수 (✨ Blocker 2 해결) ---
 def run_script(script_path):
     """스크립트를 '논블로킹(non-blocking)' 방식으로 백그라운드에서 실행합니다."""
+    
+    # (✨ 핵심 수정)
+    # 1. /usr/bin/python3 (시스템) -> {BASE_PATH}/venv/bin/python3 (가상환경)로 변경
+    # 2. 로그가 '실시간 로그' 탭에 보이도록 Crontab과 동일하게 로그 파일로 리디렉션
+    
+    python_executable = os.path.join(BASE_PATH, "venv/bin/python3")
+    log_file = script_path.replace('.py', '.log') # 예: crawler.py -> crawler.log
+    
     try:
-        # /usr/bin/python3로 스크립트를 즉시 실행
         # (nohup과 &를 사용해 대시보드가 꺼져도 봇이 계속 돌게 함)
-        command = f"nohup /usr/bin/python3 {script_path} &"
+        # (로그 파일에 표준 출력(>>)과 표준 에러(2>&1)를 모두 저장)
+        command = f"nohup {python_executable} {script_path} >> {log_file} 2>&1 &"
+        
         subprocess.Popen(command, shell=True)
         st.success(f"✅ {script_path.split('/')[-1]} 백그라운드 실행 시작!")
-        st.info("결과는 '실시간 로그' 탭에서 10초 뒤 확인하세요.")
+        st.info(f"결과는 10초 뒤 '실시간 로그' 탭 ({log_file.split('/')[-1]})에서 확인하세요.")
     except Exception as e:
         st.error(f"❌ 실행 실패: {e}")
 
@@ -44,16 +52,18 @@ def run_script(script_path):
 def read_log_file(log_path):
     """로그 파일의 최신 100줄을 읽어옵니다."""
     if not os.path.exists(log_path):
-        return f"로그 파일 없음: {log_path}"
+        return f"로그 파일 없음: {log_path}\n(봇이 아직 한 번도 실행되지 않았거나, 경로 오류일 수 있습니다.)"
     try:
         with open(log_path, "r", encoding='utf-8') as f:
             lines = f.readlines()
+            if not lines:
+                return f"로그 파일이 비어있습니다: {log_path}"
             return "".join(lines[-100:]) # 최신 100줄만
     except Exception as e:
         return f"로그 읽기 오류: {e}"
 
 # --- 4. 데이터 읽기 함수 (캐싱 사용) ---
-@st.cache_data(ttl=60) # 60초마다 데이터 새로고침
+@st.cache_data(ttl=10) # (수정) 60초 -> 10초로 줄여 더 실시간처럼 보이게 함
 def load_csv(file_path):
     if os.path.exists(file_path):
         try:
@@ -82,25 +92,31 @@ with tab1:
         st.write("'의심' 목록 수집 (1분 소요)")
         if st.button("Start Crawler Now"):
             run_script(CRAWLER_SCRIPT)
+            time.sleep(1) # 버튼 클릭 후 새로고침 시간 확보
+            st.rerun()
             
     with col2:
         st.subheader("2. '전문가' 봇 (라벨러)")
         st.write("'의심' 목록 -> '정답' 생성 (N분 소요)")
         if st.button("Start Auto-Labeler Now"):
             run_script(LABELER_SCRIPT)
+            time.sleep(1)
+            st.rerun()
 
     with col3:
         st.subheader("3. '학습기' (트레이너)")
         st.write("'정답' -> '경력직 뇌' 훈련 (30초 시뮬레이션)")
         if st.button("Start Training Now"):
             run_script(TRAIN_SCRIPT)
+            time.sleep(1)
+            st.rerun()
 
 # --- 탭 2: 데이터 뷰어 (읽기 전용) ---
 with tab2:
     st.header("📊 데이터 뷰어")
     if st.button("데이터 새로고침"):
-        # 캐시 비우고 새로고침
-        st.cache_data.clear()
+        st.cache_data.clear() # 캐시 비우기
+        st.rerun()
         
     st.subheader(f"📝 '신입' 봇이 수집한 '의심' 목록 ({DETECTED_FILE})")
     df_detected = load_csv(DETECTED_FILE)
