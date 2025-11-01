@@ -1,5 +1,5 @@
 # 🎓 (봇 3) '학습기' 봇. '자동' 정답으로 '신입' 봇 뇌 훈련 -> my-ner-model
-# (v2.1 - 실제 Fine-Tuning + 로그 중복 제거)
+# (v2.2 - 실제 Fine-Tuning + 패딩 오류 수정)
 # ----------------------------------------------------
 # 1. '정답' 목록 (feedback_data.csv) [In_2]를 읽습니다.
 # 2. 'trained.log' (학습 기록)을 읽습니다.
@@ -18,7 +18,8 @@ from transformers import ( # (✨ 신규)
     AutoTokenizer,
     AutoModelForTokenClassification,
     TrainingArguments,
-    Trainer
+    Trainer,
+    DataCollatorForTokenClassification # (✨✨✨ 1. [핵심] 데이터 패딩을 위한 Collator 임포트 ✨✨✨)
 )
 
 # --- 1. 설정값 ---
@@ -182,7 +183,10 @@ def main():
     logging.info(f"✅ 데이터 전처리 완료. (유효 샘플: {len(train_dataset)})")
 
     # 5. (✨ 신규) 실제 학습(Fine-Tuning) 시작
-    # (time.sleep(30)을 실제 코드로 대체)
+    
+    # (✨✨✨ 2. [핵심] 데이터 Collator 생성 ✨✨✨)
+    # 토크나이저를 사용해, 배치의 길이를 자동으로 맞춰주는(padding) Collator를 만듭니다.
+    data_collator = DataCollatorForTokenClassification(tokenizer=tokenizer)
     
     # (NCP 서버 사양에 맞춰 최소한의 설정으로 학습)
     training_args = TrainingArguments(
@@ -197,8 +201,8 @@ def main():
     trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=train_dataset
-        # (평가 데이터셋은 생략)
+        train_dataset=train_dataset,
+        data_collator=data_collator # (✨✨✨ 3. [핵심] Collator를 Trainer에 등록 ✨✨✨)
     )
 
     logging.info("🔥 '경력직' 뇌 실제 학습 시작... (CPU/GPU 사용)")
