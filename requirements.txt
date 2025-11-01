@@ -7,3 +7,4 @@ torch
 selenium
 datasets
 pyarrow
+accelerate
