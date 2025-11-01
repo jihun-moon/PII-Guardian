@@ -26,13 +26,8 @@ def get_llm_judgment(context, pii_content):
     탐지된 PII가 '유출'인지 '공개'인지 판단합니다.
     """
     
-    # --- (✨ 수정된 부분) ---
-    # 1. 사용할 모델 이름을 명시합니다. (v3 API와 호환되는 모델)
     MODEL_NAME = "HCX-005"
-    
-    # 2. config.py의 기본 URL에 '/v3/chat/completions/{MODEL_NAME}'을 결합합니다.
     API_URL = config.HCX_API_URL.rstrip('/') + f'/v3/chat-completions/{MODEL_NAME}'
-    # --- (수정 끝) ---
     
     headers = {
         "Authorization": f"Bearer {config.HCX_API_KEY}", 
@@ -40,7 +35,6 @@ def get_llm_judgment(context, pii_content):
     }
 
     data = {
-        # "model": "hcx-003", # <-- (✨ 수정) URL에 모델명이 포함되므로 body에서 제거
         "messages": [
             {
                 "role": "system",
@@ -64,8 +58,13 @@ def get_llm_judgment(context, pii_content):
         
         result = response.json()
         
-        # v3 응답 구조 (choices[0].message.content)
-        json_content = result['choices'][0]['message']['content']
+        # --- (✨ 핵심 수정) ---
+        # v3 응답 구조가 'choices'가 아닌 'result' 키를 사용합니다.
+        # [수정 전] json_content = result['choices'][0]['message']['content']
+        # [수정 후]
+        json_content = result['result']['message']['content']
+        # --- (수정 끝) ---
+        
         llm_answer = json.loads(json_content)
         
         return llm_answer # {"label": "...", "reason": "..."}
@@ -75,7 +74,6 @@ def get_llm_judgment(context, pii_content):
         return {"label": "오류", "reason": "타임아웃"}
     except Exception as e:
         print(f"❌ [LLM API 에러] {e}")
-        # (디버깅을 위해 서버의 실제 응답을 출력)
         if 'response' in locals():
             print(f"    (응답: {response.text})")
         return {"label": "오류", "reason": str(e)}
