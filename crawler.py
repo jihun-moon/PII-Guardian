@@ -1,5 +1,5 @@
 # 🕵️ (봇 1) '신입' 봇. '의심' 내역 수집 -> detected_leaks.csv
-# (v2.20 - Selenium + 금융/민감 PII 패턴 확장 + 로그 중복 제거 + URL 수정)
+# (v2.21 - 정규식 유연성 강화 + 로그 중복 제거 + URL 수정)
 
 import requests
 from bs4 import BeautifulSoup
@@ -22,8 +22,7 @@ import ocr_helper # (OCR은 여전히 비활성화)
 BASE_PATH = "/root/PII-Guardian"
 LOG_FILE = os.path.join(BASE_PATH, 'crawler.log')
 
-# (✨✨✨ 핵심 수정: 로그 중복 제거 ✨✨✨)
-# FileHandler를 제거하고 StreamHandler만 남깁니다.
+# (✨ 로그 중복 제거)
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s',
                     handlers=[logging.StreamHandler()])
@@ -33,28 +32,29 @@ FEEDBACK_FILE = os.path.join(BASE_PATH, 'feedback_data.csv')
 MODEL_PATH = os.path.join(BASE_PATH, 'my-ner-model')
 BASE_MODEL = 'klue/roberta-base' 
 
-# (✨✨✨ 핵심 수정 1: 정규식 패턴 대폭 확장 ✨✨✨)
+# (✨✨✨ 핵심 수정 v2.21: 정규식 유연성 강화 ✨✨✨)
 REGEX_PATTERNS = {
     # 기존
-    'EMAIL': r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
-    'PHONE': r'\b010[-.\s]?\d{4}[-.\s]?\d{4}\b',
+    'EMAIL': r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', # (이메일은 이미 유연함)
+    
+    # (수정) 010 (괄호, 점, 공백, 없음 모두 지원)
+    'PHONE': r'\b\(?(010)\)?[-.)\s]?\d{3,4}[-.\s]?\d{4}\b',
     
     # 신규 (금융/민감정보)
-    'RRN': r'\b\d{6}[- ]?[1-4]\d{6}\b', # 주민등록번호
-    'CREDIT_CARD': r'\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b', # 카드번호
-    'ACCOUNT_NUM': r'\b\d{3}[- ]?\d{2,6}[- ]?\d{2,7}\b', # 계좌번호 (DGB 112-50-1234567 포함)
-    'API_KEY': r'\b(sk|pk|im-key-prod)-[a-zA-Z0-9_,-]{20,}\b', # API 키 (IM 뱅크 키 포함)
+    'RRN': r'\b\d{6}[- ]?[1-4]\d{6}\b', # (주민번호 - 하이픈/공백/없음 모두 지원)
+    'CREDIT_CARD': r'\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b', # (카드번호 - 하이픈/공백/없음 모두 지원)
+    'ACCOUNT_NUM': r'\b\d{3}[- ]?\d{2,6}[- ]?\d{2,7}\b', # (계좌번호 - 오탐은 LLM이 처리)
+    'API_KEY': r'\b(sk|pk|im-key-prod)-[a-zA-Z0-9_,-]{20,}\b', # API 키
     'INTERNAL_IP': r'\b(192\.168\.\d{1,3}\.\d{1,3})\b|\b(10\.\d{1,3}\.\d{1,3}\.\d{1,3})\b', # 내부 IP
-    'PHONE_GENERAL': r'\b0[2-9][0-9]?[-.\s]?\d{3,4}[-.\s]?\d{4}\b' # (1588 등) 일반 전화
+    
+    # (수정) 일반 전화 (지역번호 괄호, 1588-xxxx, 1588 xxxx, 1588xxxx 모두 지원)
+    'PHONE_GENERAL': r'\b\(?(0[2-9][0-9]?)\)?[-.)\s]?\d{3,4}[-.\s]?\d{4}\b|\b(15\d{2}|16\d{2})[-.\s]?\d{4}\b'
 }
 
-# (✨✨✨ 핵심 수정 2: 탐지할 URL '정확한' 주소로 변경 ✨✨✨)
+# (✨ 탐지할 URL - 올바른 주소)
 CRAWL_URLS = [
-    # (수정) 텍스트 종합 테스트 파일
-    "https://github.com/jihun-moon/PII-Guardian/blob/main/test_site/index.html",
-    
-    # (수정) 이미지 종합 테스트 파일 (텍스트만 읽기)
-    "https://github.com/jihun-moon/PII-Guardian/blob/main/test_site/page_with_image.html",
+    "https://github.com/jihun-moon/PII-Guardian/blob/main/test_site/test_site_comprehensive.html",
+    "https://github.com/jihun-moon/PII-Guardian/blob/main/test_site/test_site_images.html",
 ]
 
 # (✨ 신규) Selenium 드라이버 설정
