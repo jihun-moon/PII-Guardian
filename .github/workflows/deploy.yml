@@ -12,11 +12,11 @@ jobs:
           printf '%b\n' "${{ secrets.NCP_SSH_KEY }}" > /tmp/ncp_key
           chmod 600 /tmp/ncp_key
 
-      # 2. 'ubuntu' 사용자로 접속하여 배포
-      - name: Deploy to NCP VM via ssh (as ubuntu)
+      # 2. 'root' 사용자로 접속하여 배포
+      - name: Deploy to NCP VM via ssh (as root)
         env:
           NCP_HOST: ${{ secrets.NCP_HOST }}
-          # (중요) 이 시크릿은 'ubuntu'여야 합니다.
+          # (중요) 이 시크릿은 'root'여야 합니다.
           NCP_USERNAME: ${{ secrets.NCP_USERNAME }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
@@ -26,23 +26,22 @@ jobs:
             # (중요) 스크립트 실행 중 하나라도 실패하면 즉시 중단합니다.
             set -e
 
+            # 'root'로 접속되었는지 확인
             echo "Connecting as: $(whoami)"
 
-            # 0. 시스템 패키지 설치 (관리자 권한 'sudo' 필요)
-            # apt-get은 'sudo' 없이 실행할 수 없습니다.
-            # -y 플래그를 추가하여 'Y/n' 질문에 자동으로 'Y'를 누르도록 합니다.
-            echo "Updating packages with sudo..."
-            sudo apt-get update
-            sudo apt-get install -y python3-pip git
+            # 0. 시스템 패키지 설치 (root는 'sudo'가 필요 없습니다)
+            echo "Updating packages..."
+            apt-get update
+            apt-get install -y python3-pip git
             
-            # 1. 배포할 폴더 경로를 'ubuntu' 사용자의 홈 디렉토리로 변경
-            export DEPLOY_DIR="/home/ubuntu/PII-Guardian"
+            # 1. 배포할 폴더 경로를 'root' 사용자의 홈 디렉토리로 변경
+            export DEPLOY_DIR="/root/PII-Guardian"
             
             # 2. 레포지토리 클론 또는 풀
             if [ ! -d "$DEPLOY_DIR" ]; then
               echo "Cloning repository..."
-              # 상위 디렉토리도 /home/ubuntu 로 변경
-              cd /home/ubuntu
+              # 상위 디렉토리도 /root 로 변경
+              cd /root
               git clone https://github.com/${GITHUB_REPOSITORY}.git $DEPLOY_DIR
             else
               echo "Pulling latest code..."
@@ -50,14 +49,14 @@ jobs:
               git pull
             fi
             
-            # 3. 의존성 설치 (이건 'ubuntu' 사용자의 권한으로 설치)
+            # 3. 의존성 설치 (root 권한으로 설치)
             cd $DEPLOY_DIR
             pip3 install -r requirements.txt
             
-            # 4. 애플리케이션 재시작 (관리자 권한 'sudo' 필요)
-            # systemctl은 'sudo' 없이 실행할 수 없습니다.
-            echo "Restarting application service with sudo..."
-            sudo systemctl restart pii-guardian.service || true
+            # 4. 애플리케이션 재시작 (root는 'sudo'가 필요 없습니다)
+            echo "Restarting application service..."
+            systemctl restart pii-guardian.service || true
             
             echo "✅ 배포 성공!"
           EOF
+
