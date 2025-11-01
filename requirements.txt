@@ -8,3 +8,5 @@ selenium
 datasets
 pyarrow
 accelerate
+Flask
+Faker
