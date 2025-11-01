@@ -18,9 +18,12 @@ jobs:
           NCP_HOST: ${{ secrets.NCP_HOST }}
           NCP_USERNAME: ${{ secrets.NCP_USERNAME }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          # (수정 1) Hugging Face 토큰을 GitHub Secrets에서 가져옵니다.
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
+          # (수정 2) HF_TOKEN을 SSH 환경 변수로 전달합니다.
           ssh -i /tmp/ncp_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${NCP_USERNAME}@${NCP_HOST} \
-            "GITHUB_REPOSITORY=${GITHUB_REPOSITORY} bash -s" <<'EOF'
+            "GITHUB_REPOSITORY=${GITHUB_REPOSITORY} HF_TOKEN=${HF_TOKEN} bash -s" <<'EOF'
             
             # (중요) 스크립트 실행 중 하나라도 실패하면 즉시 중단합니다.
             set -e
@@ -59,6 +62,13 @@ jobs:
             echo "Installing requirements into venv..."
             venv/bin/pip install -r requirements.txt
             
+            # 3c. (신규) Hugging Face Hub 인증
+            # 'transformers' 라이브러리가 자동으로 이 파일을 읽어 인증합니다.
+            echo "Setting up Hugging Face token..."
+            mkdir -p /root/.cache/huggingface
+            # $HF_TOKEN 변수는 (수정 2)에서 전달받았습니다.
+            echo -n "$HF_TOKEN" > /root/.cache/huggingface/token
+            
             # 4. Crontab 스케줄 자동 설정
             # 배포 시마다 스케줄을 덮어써서 최신 상태를 유지합니다.
             echo "Setting up scheduled tasks (cron jobs)..."
@@ -82,8 +92,5 @@ jobs:
             systemctl restart pii-guardian.service || true
             
             echo "✅ 배포 성공! (Dashboard service restarted, Cron jobs updated)"
-          # (수정 완료) EOF는 반드시 해당 줄의 맨 앞에, 공백 없이 위치해야 합니다.
-          # (YAML 수정) 이 EOF는 run: | 블록에 포함되어야 하므로, ssh 명령어(10칸)와
-          # 동일한 수준으로 들여쓰기합니다.
-          EOF
-
+            # (✨ 최종 수정) 'here document'의 닫는 EOF는 반드시 줄 맨 앞에 위치해야 합니다.
+            EOF
