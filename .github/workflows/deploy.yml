@@ -1,7 +1,9 @@
 name: Deploy to NCP Server
+
+# 학습 서버를 평소에 내려 두기 때문에 푸시마다 자동 배포하면 SSH 타임아웃으로 반드시 실패한다.
+# 서버를 켜 둔 날에만 Actions 탭에서 직접 실행한다.
 on:
-  push:
-    branches: [ main ]
+  workflow_dispatch:
 jobs:
   deploy:
     runs-on: ubuntu-latest
