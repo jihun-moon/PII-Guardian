@@ -6,15 +6,14 @@ from bs4 import BeautifulSoup
 import re
 import pandas as pd
 import os
+import sys
 import time
 from transformers import pipeline, AutoTokenizer, AutoModelForTokenClassification
-from urllib.parse import urljoin 
 import logging
 # (✨ Selenium 관련 모듈 모두 삭제)
 
 # 우리 헬퍼 및 설정 파일 임포트
 import config
-import ocr_helper # (OCR은 여전히 비활성화)
 
 # --- 1. 설정값 ---
 BASE_PATH = "/root/PII-Guardian"
@@ -234,7 +233,7 @@ if __name__ == "__main__":
     ner_brain = load_ner_pipeline() # <-- 변수명이 'ner_brain'
     if ner_brain is None:
         logging.error("❌ AI 뇌 로드에 실패하여 '신입' 봇을 종료합니다.")
-        exit()
+        sys.exit(1)
     logging.info("🧠 AI 뇌 로드 완료.")
 
     # (✨ Selenium 드라이버 로드 코드 삭제)

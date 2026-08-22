@@ -9,8 +9,6 @@
 import streamlit as st
 import pandas as pd
 import os
-import subprocess # (제거 대상)
-import time
 
 # --- 1. 경로 설정 (NCP 서버의 절대 경로) ---
 BASE_PATH = "/root/PII-Guardian" 
