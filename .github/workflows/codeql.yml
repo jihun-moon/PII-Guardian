@@ -1,0 +1,37 @@
+name: CodeQL
+
+# 공개 저장소는 CodeQL 이 무료다. main 푸시와 매주 월요일에 돌린다.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '17 3 * * 1'
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  analyze:
+    name: 분석 (python)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: CodeQL 초기화
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+          queries: security-and-quality
+
+      - name: 자동 빌드
+        uses: github/codeql-action/autobuild@v3
+
+      - name: 분석 실행
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:python"
