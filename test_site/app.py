@@ -1,6 +1,8 @@
 # 파일 이름: app.py
 # 위치: Pii-Guardian/test_site/
 
+import os
+
 from flask import Flask, make_response
 # (✨ 수정) v2 대신 v3에서 함수를 가져옴
 from generate_dataset_v3 import generate_random_test_data
@@ -36,5 +38,8 @@ def text_only():
     return response
 
 if __name__ == '__main__':
-    # 서버 실행 (debug=True로 설정하면 코드 변경 시 자동 재시작)
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # 디버그 모드는 기본으로 끈다. 켜면 외부에 디버거 콘솔이 열려
+    # 어느 코드든 실행할 수 있게 된다.
+    # 로컬에서 자동 재시작이 필요할 때만 FLASK_DEBUG=1 로 실행한다.
+    debug_mode = os.environ.get('FLASK_DEBUG', '0') in ('1', 'true', 'True')
+    app.run(debug=debug_mode, host='0.0.0.0', port=5000)
