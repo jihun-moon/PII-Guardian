@@ -2,7 +2,8 @@
 
 웹 페이지를 긁어서 개인정보 노출을 찾는 봇입니다.
 찾은 것을 사람이 아니라 LLM에게 채점시키고, 그 채점 결과로 모델을 다시 학습시킵니다.
-네이버 클라우드 서버에서 매일 자동으로 한 바퀴 돕니다.
+네이버 클라우드 서버에서 매일 자동으로 한 바퀴 돌도록 만들었습니다.
+서버를 깨우는 예약 작업은 2025-11-02 부터 2026-01-10 까지 매일 돌았고 지금은 꺼져 있습니다.
 
 <p>
   <img src="https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white"/>
@@ -91,7 +92,8 @@ label_list = ['O', 'B-PII', 'I-PII']
 1. LLM 판정이 `유출` 인 것만
 2. 이미 학습한 항목은 `trained_set` 으로 걸러서 다시 넣지 않는다
 
-두 번째가 없으면 같은 데이터가 매일 다시 학습돼서 그쪽으로 모델이 치우칩니다.
+두 번째 조건은 같은 데이터가 매일 다시 들어가는 걸 막으려고 넣었습니다.
+그런데 `train.py` 는 매번 베이스 모델(`klue/roberta-base`)에서 새로 시작합니다. 그래서 새 모델은 그날 새로 들어온 데이터만 배우고 전날까지 학습한 데이터는 빠집니다.
 
 <br/>
 
@@ -121,7 +123,9 @@ label_list = ['O', 'B-PII', 'I-PII']
 
 GitHub Actions 워크플로 두 개로 돌립니다.
 
-### `deploy.yml` : main 에 푸시하면 배포
+### `deploy.yml` : Actions 탭에서 수동으로 배포
+
+처음엔 main 에 푸시할 때마다 돌렸습니다. 서버를 평소에 내려 두니 SSH 접속이 실패해서 2026-08-22 에 수동 실행으로 바꿨습니다.
 
 `appleboy/ssh-action` 으로 NCP VM 에 접속해서 코드를 받고, venv 를 만들고,
 crontab 세 줄을 등록하고, 대시보드 서비스를 재시작합니다.
@@ -167,8 +171,9 @@ curl -s -X GET \
 
 서명 문자열에 개행이 들어가서 `echo -n` 과 `printf` 중 무엇을 쓰느냐로 서명이 달라집니다.
 여기서 한참 401 을 받았습니다.
+지금 워크플로도 `echo -n` 이라 bash 에서는 `\n` 이 개행이 아니라 글자 그대로 서명에 들어갑니다. `curl -s` 는 401 을 받아도 성공으로 끝나서, Actions 에 찍힌 성공 69회만으로는 서버가 실제로 켜졌는지 알 수 없습니다.
 
-**서버를 켜는 것만큼 끄는 것도 운영이라는 걸 여기서 배웠습니다.**
+끄는 쪽은 이 저장소에 없습니다. 켜는 것보다 끄는 걸 자동화하는 게 더 어려웠습니다.
 
 <br/>
 
@@ -176,14 +181,14 @@ curl -s -X GET \
 
 ```
 crawler.py                    264줄  수집과 1차 탐지
-autolabeler.py                100줄  LLM 라벨링
-train.py                      224줄  NER 파인튜닝
-dashboard.py                  181줄  Streamlit 관제 화면
-llm_helper.py                  99줄  HyperCLOVA X 호출
-ocr_helper.py                  53줄  이미지 속 텍스트 추출
+autolabeler.py                101줄  LLM 라벨링
+train.py                      223줄  NER 파인튜닝
+dashboard.py                  180줄  Streamlit 관제 화면
+llm_helper.py                 100줄  HyperCLOVA X 호출
+ocr_helper.py                  54줄  이미지 속 텍스트 추출
 test_site/
-├── app.py                     39줄  테스트 서버
-├── generate_dataset_v3.py    198줄  PII 9종 + 난독화 + 오탐 생성기
+├── app.py                     45줄  테스트 서버
+├── generate_dataset_v3.py    199줄  PII 9종 + 난독화 + 오탐 생성기
 ├── index.html
 ├── page_with_image.html
 └── personal_info.png                이미지에 박힌 개인정보 케이스
@@ -222,6 +227,7 @@ python3 crawler.py && python3 autolabeler.py && python3 train.py
 - LLM 판정을 정답으로 씁니다. LLM 이 틀리면 그 오류가 그대로 모델에 들어갑니다. 표본 검수 절차가 없습니다
 - `유출` 로 판정된 것만 학습해서 음성 예시가 부족합니다. 오탐이 늘어날 수 있는 구조입니다
 - OCR 은 붙여만 뒀고 정확도를 재지 않았습니다
+- 재학습이 매번 베이스 모델에서 새로 시작하고 새로 들어온 데이터만 넣습니다. 전날까지 배운 것이 다음 모델에 남지 않습니다
 - 테스트가 없습니다
 
 <br/>
