@@ -1,41 +1,41 @@
-# 🎓 (봇 3) '학습기' 봇. '자동' 정답으로 '신입' 봇 뇌 훈련 -> my-ner-model
+# (봇 3) '학습기' 봇. '자동' 정답으로 '신입' 봇 뇌 훈련 -> my-ner-model
 # (v2.4 - 체크포인트 2개 저장)
 # ----------------------------------------------------
 # 1. '정답' 목록 (feedback_data.csv) [In_2]를 읽습니다.
 # 2. 'trained.log' (학습 기록)을 읽습니다.
 # 3. [In_2]에만 있고 [학습 기록]에는 없는 "새로운 정답"만 학습합니다.
 # 4. 학습 완료 후, "새로운 정답"의 ID를 'trained.log'에 '추가'합니다.
-# 5. (✨ 신규) 재학습된 '경력직' 뇌를 'my-ner-model' 폴더에 저장합니다.
+# 5. (신규) 재학습된 '경력직' 뇌를 'my-ner-model' 폴더에 저장합니다.
 # ----------------------------------------------------
 
 import pandas as pd
 import os
 import logging
-import config # (✨ 신규) HF_TOKEN을 읽기 위해
-from datasets import Dataset # (✨ 신규)
-from transformers import ( # (✨ 신규)
+import config # (신규) HF_TOKEN을 읽기 위해
+from datasets import Dataset # (신규)
+from transformers import ( # (신규)
     AutoTokenizer,
     AutoModelForTokenClassification,
     TrainingArguments,
     Trainer,
-    DataCollatorForTokenClassification # (✨ 패딩 오류 수정)
+    DataCollatorForTokenClassification # (패딩 오류 수정)
 )
 
 # --- 1. 설정값 ---
 BASE_PATH = "/root/PII-Guardian" 
 LOG_FILE = os.path.join(BASE_PATH, 'train.log')
 
-# (✨ 로그 중복 제거)
+# (로그 중복 제거)
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s',
                     handlers=[logging.StreamHandler()])
 
 FEEDBACK_FILE = os.path.join(BASE_PATH, 'feedback_data.csv')
-MODEL_PATH = os.path.join(BASE_PATH, 'my-ner-model') # 🧠 '경력직' 뇌 저장 경로
+MODEL_PATH = os.path.join(BASE_PATH, 'my-ner-model') # '경력직' 뇌 저장 경로
 TRAINED_LOG_FILE = os.path.join(BASE_PATH, 'trained.log')
-BASE_MODEL = 'klue/roberta-base' # 🧠 '신입' 뇌 (기본 모델)
+BASE_MODEL = 'klue/roberta-base' # '신입' 뇌 (기본 모델)
 
-# (✨ 신규) NER 태그 정의 (IOB2 형식)
+# (신규) NER 태그 정의 (IOB2 형식)
 label_list = ['O', 'B-PII', 'I-PII']
 label2id = {label: i for i, label in enumerate(label_list)}
 id2label = {i: label for i, label in enumerate(label_list)}
@@ -50,7 +50,7 @@ def load_trained_log():
         with open(TRAINED_LOG_FILE, 'r', encoding='utf-8') as f:
             return set(line.strip() for line in f)
     except Exception as e:
-        logging.warning(f"⚠️ 'trained.log' 로드 실패: {e}")
+        logging.warning(f"'trained.log' 로드 실패: {e}")
         return set()
 
 def save_trained_log(unique_id):
@@ -58,7 +58,7 @@ def save_trained_log(unique_id):
     with open(TRAINED_LOG_FILE, 'a', encoding='utf-8') as f:
         f.write(unique_id + '\n')
 
-# --- 3. (✨ 신규) 데이터 전처리 함수 ---
+# --- 3. (신규) 데이터 전처리 함수 ---
 def preprocess_for_ner(new_data_df, tokenizer):
     """
     (context, content) 데이터를 NER 학습용 IOB2 태그로 변환합니다.
@@ -75,7 +75,7 @@ def preprocess_for_ner(new_data_df, tokenizer):
         # 1. PII (content)가 문맥(context) 어디에 있는지 찾기
         start_idx = context.find(content)
         if start_idx == -1:
-            logging.warning(f"⚠️ 학습 데이터 오류: PII '{content}'가 문맥 '{context[:50]}...'에 없습니다. 건너뜁니다.")
+            logging.warning(f"학습 데이터 오류: PII '{content}'가 문맥 '{context[:50]}...'에 없습니다. 건너뜁니다.")
             continue
         end_idx = start_idx + len(content)
 
@@ -114,21 +114,21 @@ def preprocess_for_ner(new_data_df, tokenizer):
 
 # --- 4. 메인 실행 ---
 def main():
-    logging.info("🤖 3. '학습기' 봇(Trainer) 작동 시작...")
+    logging.info("3. '학습기' 봇(Trainer) 작동 시작...")
     
     # 1. '정답' 파일(In_2) 로드
     if not os.path.exists(FEEDBACK_FILE):
-        logging.warning(f"⚠️ '정답' 목록({FEEDBACK_FILE})이 없습니다. 학습을 건너뜁니다.")
+        logging.warning(f"'정답' 목록({FEEDBACK_FILE})이 없습니다. 학습을 건너뜁니다.")
         return
 
     try:
         feedback_df = pd.read_csv(FEEDBACK_FILE)
         feedback_df['url'] = feedback_df['url'].fillna('N/A')
     except pd.errors.EmptyDataError:
-        logging.info("✅ '정답' 목록이 비어있습니다. 학습을 건너뜁니다.")
+        logging.info("'정답' 목록이 비어있습니다. 학습을 건너뜁니다.")
         return
     except Exception as e:
-        logging.error(f"❌ '정답' 파일 로드 중 에러: {e}")
+        logging.error(f"'정답' 파일 로드 중 에러: {e}")
         return
         
     # 2. '학습 기록' 로드 및 '새로운 학습 데이터' 필터링
@@ -145,16 +145,16 @@ def main():
             new_ids_to_log.append(unique_id)
 
     if not new_data_rows:
-        logging.info("✅ 새로 학습할 '유출' 데이터가 없습니다. (모두 이전에 학습 완료)")
+        logging.info("새로 학습할 '유출' 데이터가 없습니다. (모두 이전에 학습 완료)")
         return
 
-    logging.info(f"🔥 총 {len(new_data_rows)}개의 '새로운 유출' 샘플로 뇌를 재학습(Fine-Tuning)합니다...")
+    logging.info(f"총 {len(new_data_rows)}개의 '새로운 유출' 샘플로 뇌를 재학습(Fine-Tuning)합니다...")
     new_data_df = pd.DataFrame(new_data_rows)
 
-    # 3. (✨ 신규) 모델과 토크나이저 로드
+    # 3. (신규) 모델과 토크나이저 로드
     HF_TOKEN = getattr(config, 'HF_TOKEN', None)
     if not HF_TOKEN:
-        logging.error("❌ config.py에서 HF_TOKEN을 찾을 수 없습니다. 학습을 중단합니다.")
+        logging.error("config.py에서 HF_TOKEN을 찾을 수 없습니다. 학습을 중단합니다.")
         return
         
     tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, token=HF_TOKEN)
@@ -166,20 +166,20 @@ def main():
         token=HF_TOKEN
     )
     
-    # 4. (✨ 신규) 데이터 전처리
+    # 4. (신규) 데이터 전처리
     logging.info("데이터 전처리(NER 태깅) 시작...")
     train_dataset = preprocess_for_ner(new_data_df, tokenizer)
     
     if train_dataset is None:
-        logging.warning("⚠️ 전처리 후 학습할 유효한 데이터가 없습니다. 학습을 건너뜁니다.")
+        logging.warning("전처리 후 학습할 유효한 데이터가 없습니다. 학습을 건너뜁니다.")
         # (참고: PII를 context에서 못 찾는 등의 이유로 데이터가 0이 될 수 있음)
         return
         
-    logging.info(f"✅ 데이터 전처리 완료. (유효 샘플: {len(train_dataset)})")
+    logging.info(f"데이터 전처리 완료. (유효 샘플: {len(train_dataset)})")
 
-    # 5. (✨ 신규) 실제 학습(Fine-Tuning) 시작
+    # 5. (신규) 실제 학습(Fine-Tuning) 시작
     
-    # (✨ 패딩 오류 수정)
+    # (패딩 오류 수정)
     data_collator = DataCollatorForTokenClassification(tokenizer=tokenizer)
     
     # (NCP 서버 사양에 맞춰 최소한의 설정으로 학습)
@@ -191,7 +191,7 @@ def main():
         logging_steps=10,               # 10 스텝마다 로그 출력
         report_to="none",               # (필수) wandb 같은 외부 로깅 비활성화
         
-        # (✨✨✨ 핵심 수정: 용량 관리 ✨✨✨)
+        # (핵심 수정: 용량 관리 )
         # 가장 최근의 체크포인트 2개만 남기고 나머지는 자동으로 삭제합니다.
         save_total_limit=2
     )
@@ -200,15 +200,15 @@ def main():
         model=model,
         args=training_args,
         train_dataset=train_dataset,
-        data_collator=data_collator # (✨ 패딩 오류 수정)
+        data_collator=data_collator # (패딩 오류 수정)
     )
 
-    logging.info("🔥 '경력직' 뇌 실제 학습 시작... (CPU/GPU 사용)")
+    logging.info("'경력직' 뇌 실제 학습 시작... (CPU/GPU 사용)")
     trainer.train()
-    logging.info("✅ 재학습 완료!")
+    logging.info("재학습 완료!")
 
-    # 6. (✨ 신규) '경력직' 뇌 최종 저장
-    logging.info(f"💾 '경력직' 뇌를 {MODEL_PATH}에 저장합니다.")
+    # 6. (신규) '경력직' 뇌 최종 저장
+    logging.info(f"'경력직' 뇌를 {MODEL_PATH}에 저장합니다.")
     trainer.save_model(MODEL_PATH)
     tokenizer.save_pretrained(MODEL_PATH) # (중요) 토크나이저도 함께 저장
 
@@ -216,8 +216,8 @@ def main():
     for unique_id in new_ids_to_log:
         save_trained_log(unique_id)
         
-    logging.info(f"💾 {len(new_ids_to_log)}건을 '학습 완료' 처리했습니다.")
-    logging.info("🤖 3. '학습기' 봇(Trainer) 작동 완료.")
+    logging.info(f"{len(new_ids_to_log)}건을 '학습 완료' 처리했습니다.")
+    logging.info("3. '학습기' 봇(Trainer) 작동 완료.")
 
 if __name__ == "__main__":
     main()

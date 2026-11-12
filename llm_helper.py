@@ -1,4 +1,4 @@
-# 🤖 (AI) HyperCLOVA API 호출 도우미
+# (AI) HyperCLOVA API 호출 도우미
 # (v2.2 - Prompt Engineering + 로그 중복 제거)
 # ----------------------------------------------------
 # 'autolabeler.py'가 이 파일을 import하여 LLM의 판단을 받습니다.
@@ -7,12 +7,12 @@
 import requests
 import json
 import config # (우리의 비밀 키 로드)
-import logging # (✨ 신규)
+import logging # (신규)
 
-# (✨ 신규) autolabeler와 같은 로거를 사용합니다.
+# (신규) autolabeler와 같은 로거를 사용합니다.
 logger = logging.getLogger(__name__)
 
-# (✨✨✨ 핵심 수정 v2.2: Prompt Engineering 강화 ✨✨✨)
+# (핵심 수정 v2.2: Prompt Engineering 강화 )
 # AI가 '신입' 봇의 오탐(False Positive)까지 걸러내도록 지침을 대폭 강화합니다.
 SYSTEM_PROMPT = """
 당신은 최고의 개인정보 보안 전문가(LLM)입니다.
@@ -79,7 +79,7 @@ def get_llm_judgment(context, pii_content):
         
         result = response.json()
         
-        # --- (✨ 핵심 수정) ---
+        # --- (핵심 수정) ---
         # v3 응답 구조가 'choices'가 아닌 'result' 키를 사용합니다.
         json_content = result['result']['message']['content']
         # --- (수정 끝) ---
@@ -89,12 +89,12 @@ def get_llm_judgment(context, pii_content):
         return llm_answer # {"label": "...", "reason": "..."}
         
     except requests.exceptions.ReadTimeout:
-        # (✨ 수정) print -> logger.error
-        logger.error("❌ [LLM API 에러] HyperCLOVA 타임아웃")
+        # (수정) print -> logger.error
+        logger.error("[LLM API 에러] HyperCLOVA 타임아웃")
         return {"label": "오류", "reason": "타임아웃"}
     except Exception as e:
-        # (✨ 수정) print -> logger.error
-        logger.error(f"❌ [LLM API 에러] {e}")
+        # (수정) print -> logger.error
+        logger.error(f"[LLM API 에러] {e}")
         if 'response' in locals():
             logger.error(f"    (응답: {response.text})")
         return {"label": "오류", "reason": str(e)}

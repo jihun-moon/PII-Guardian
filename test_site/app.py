@@ -4,7 +4,7 @@
 import os
 
 from flask import Flask, make_response
-# (✨ 수정) v2 대신 v3에서 함수를 가져옴
+# (수정) v2 대신 v3에서 함수를 가져옴
 from generate_dataset_v3 import generate_random_test_data
 
 app = Flask(__name__)

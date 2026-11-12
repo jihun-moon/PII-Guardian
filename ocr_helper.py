@@ -1,4 +1,4 @@
-# 👁️ (AI) CLOVA OCR API 호출 도우미
+# (AI) CLOVA OCR API 호출 도우미
 # ----------------------------------------------------
 # 'crawler.py'가 이 파일을 import하여 이미지 속 글자를 읽습니다.
 # ----------------------------------------------------
@@ -47,8 +47,8 @@ def get_ocr_text(image_url):
         return full_text
         
     except requests.exceptions.ReadTimeout:
-        print(f"❌ [OCR API 에러] {image_url} 타임아웃")
+        print(f"[OCR API 에러] {image_url} 타임아웃")
         return None
     except Exception as e:
-        print(f"❌ [OCR API 에러] {e}")
+        print(f"[OCR API 에러] {e}")
         return None
